@@ -1,4 +1,4 @@
-export type BookStatus = 'read' | 'tbr' | 'recommended';
+export type BookStatus = 'read' | 'reading' | 'tbr' | 'recommended';
 
 export interface RelationshipDynamics {
     romantic?: string;
@@ -14,6 +14,7 @@ export interface Book {
     tropes: string[];
     themes: string[];
     microthemes: string[];
+    description?: string; // Official book description
     relationship_dynamics: RelationshipDynamics;
     pacing?: string;
     reader_need?: string;
@@ -23,6 +24,10 @@ export interface Book {
     coverImage?: string; // Additional field for UI
     match_reasoning?: string; // For recommendations
     confidence_score?: number; // For recommendations
+    progress?: number; // Current page or percentage
+    total_pages?: number; // Total pages
+    rating?: number; // 1-5 stars
+    ratings_count?: number; // Total number of ratings
 }
 
 export interface PerplexityResponse {
@@ -45,4 +50,14 @@ export interface InterviewState {
     final_context: string;
     phase: number;
     user_profile?: string;
+}
+
+export interface RecHistoryItem {
+    id: string;
+    created_at: string;
+    source_type: 'quick' | 'context' | 'interview';
+    prompt_context: string;
+    recommendations: Book[];
+    intro_text?: string;
+    cost?: number;
 }

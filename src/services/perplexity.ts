@@ -6,8 +6,6 @@ import {
     PROFILE_QUESTION_STYLES
 } from './prompts';
 import { parseJson } from '../utils/helpers';
-// We will use fetch native API or axios. Using fetch for fewer deps if possible, but axios is robust.
-// Let's assume axios is installed as per plan.
 import axios from 'axios';
 
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
@@ -18,7 +16,7 @@ export async function callPerplexity(
     prompt: string,
     model: string = 'sonar-pro',
     apiKey: string
-): Promise<{ success: boolean; content?: string; error?: string }> {
+): Promise<{ success: boolean; content?: string; error?: string; usage?: { prompt_tokens: number; completion_tokens: number } }> {
     if (!apiKey) {
         return { success: false, error: "Perplexity API key not configured" };
     }
@@ -35,14 +33,15 @@ export async function callPerplexity(
             },
             {
                 headers: {
-                    'Authorization': \`Bearer \${apiKey}\`,
+                    'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json'
                 }
             }
         );
 
         const content = response.data.choices[0].message.content;
-        return { success: true, content };
+        const usage = response.data.usage;
+        return { success: true, content, usage };
 
     } catch (error: any) {
         console.error("Perplexity API Error:", error.response?.data || error.message);
@@ -50,20 +49,31 @@ export async function callPerplexity(
     }
 }
 
+export const PRICING = {
+    'sonar-deep-research': { input: 2.00 / 1000000, output: 8.00 / 1000000 },
+    'sonar-pro': { input: 3.00 / 1000000, output: 15.00 / 1000000 },
+    'default': { input: 3.00 / 1000000, output: 15.00 / 1000000 }
+};
+
+export function calculateCost(model: string, usage: { prompt_tokens: number; completion_tokens: number } | undefined): number {
+    if (!usage) return 0;
+    const pricing = PRICING[model as keyof typeof PRICING] || PRICING['default'];
+    return (usage.prompt_tokens * pricing.input) + (usage.completion_tokens * pricing.output);
+}
+
 export function buildRecommendationPrompt(
-    booksList: string[], 
-    mode: RecommendationMode, 
-    contextInput?: string, 
+    booksList: string[],
+    mode: RecommendationMode,
+    contextInput?: string,
     interviewContext?: string
 ): string {
-    // Special case: Interview mode with NO books
     if (mode === "Full Interview" && interviewContext && (!booksList || booksList.length === 0)) {
-        return \`Task: Based solely on the user's interview responses below, recommend 4-6 books.
+        return `Task: Based solely on the user's interview responses below, recommend a comprehensive list of books.
 
-TASK: Based solely on the user's interview responses, recommend 4-6 books that match their preferences.
+TASK: Based solely on the user's interview responses, recommend as many high-quality books as possible that match their preferences. Do not limit the number.
 
 USER PREFERENCES (from interview):
-\${interviewContext}
+${interviewContext}
 
 CRITICAL - OUTPUT FORMAT:
 You MUST return EXACTLY this structure. Do NOT return analysis fields at the top level.
@@ -71,7 +81,7 @@ You MUST return EXACTLY this structure. Do NOT return analysis fields at the top
 CORRECT structure (use this):
 {
   "analysis": {
-    "reader_profile": "2-3 sentence description of what this reader enjoys and seeks in books based on the interview"
+    "reader_profile": "A candid introduction paragraph explaining honestly how you interpreted the user's responses and selected these specific books. Address the user directly."
   },
   "recommendations": [
     {
@@ -96,46 +106,20 @@ CORRECT structure (use this):
 
 Your response MUST have these TWO top-level keys ONLY:
 1. "analysis" - an OBJECT containing reader_profile
-2. "recommendations" - an ARRAY of 4-6 book objects
+2. "recommendations" - an ARRAY of book objects (comprehensive list)
 
 Output ONLY valid JSON starting with {. No text before or after.
-Base recommendations entirely on interview preferences.\`;
+Base recommendations entirely on interview preferences.`;
     }
 
-    // Standard case: with books
     let prompt = BASE_PROMPT.replace("{user_book_list}", booksList.join(', '));
 
-    // Mode 2: Add user context
     if (mode === "Books + Context" && contextInput && contextInput.trim()) {
-        const contextSection = \`
-
-ADDITIONAL USER CONTEXT:
-The user has provided the following preferences:
-
-\${contextInput}
-
-Please incorporate these preferences into your analysis and recommendations.
-Prioritize books that align with both the input book patterns AND these stated preferences.
-\`;
+        const contextSection = `\n\nADDITIONAL USER CONTEXT:\nThe user has provided the following preferences:\n\n${contextInput}\n\nPlease incorporate these preferences into your analysis and recommendations.\nPrioritize books that align with both the input book patterns AND these stated preferences.\n`;
         prompt = prompt.replace("CRITICAL - OUTPUT FORMAT:", contextSection + "\n\nCRITICAL - OUTPUT FORMAT:");
     }
-    // Mode 3: Add interview insights
     else if (mode === "Full Interview" && interviewContext) {
-        const interviewSection = \`
-
-DETAILED USER PREFERENCES (from interview):
-
-\${interviewContext}
-
-These preferences were gathered through an adaptive interview and should be the PRIMARY
-driver of recommendations. Use input books as secondary context for genre/style preferences.
-
-When making recommendations:
-1. Prioritize alignment with stated preferences
-2. Use input books to understand reading history
-3. Ensure recommendations respect content preferences mentioned
-4. Explain how each recommendation aligns with specific interview insights
-\`;
+        const interviewSection = `\n\nDETAILED USER PREFERENCES (from interview):\n\n${interviewContext}\n\nThese preferences were gathered through an adaptive interview and should be the PRIMARY\ndriver of recommendations. Use input books as secondary context for genre/style preferences.\n\nWhen making recommendations:\n1. Prioritize alignment with stated preferences\n2. Use input books to understand reading history\n3. Ensure recommendations respect content preferences mentioned\n4. Explain how each recommendation aligns with specific interview insights\n`;
         prompt = prompt.replace("CRITICAL - OUTPUT FORMAT:", interviewSection + "\n\nCRITICAL - OUTPUT FORMAT:");
     }
 
@@ -143,8 +127,8 @@ When making recommendations:
 }
 
 export async function analyzeUserProfile(conversationHistory: any[], booksList: string[], model: string, apiKey: string) {
-    const booksContext = booksList && booksList.length > 0 ? \`User provided: \${booksList.join(', ')}\` : "No books provided.";
-    const historyText = conversationHistory.map(msg => \`\${msg.role.toUpperCase()}: \${msg.content}\`).join('\\n');
+    const booksContext = booksList && booksList.length > 0 ? `User provided: ${booksList.join(', ')}` : "No books provided.";
+    const historyText = conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
 
     const prompt = INTERVIEW_ANALYSIS_PROMPT
         .replace("{books_context}", booksContext)
@@ -157,9 +141,10 @@ export async function analyzeUserProfile(conversationHistory: any[], booksList: 
     }
 
     try {
-        return parseJson(result.content);
+        const parsed = parseJson(result.content);
+        return { ...parsed, usage: result.usage };
     } catch (e) {
-        return { error: \`Failed to parse profile analysis: \${e}\` };
+        return { error: `Failed to parse profile analysis: ${e}` };
     }
 }
 
@@ -173,8 +158,8 @@ export async function generateInterviewQuestion(
     model: string,
     apiKey: string
 ) {
-    const booksContext = booksList && booksList.length > 0 
-        ? \`User likes: \${booksList.join(', ')}\\nTailor questions accordingly.\`
+    const booksContext = booksList && booksList.length > 0
+        ? `User likes: ${booksList.join(', ')}\nTailor questions accordingly.`
         : "No books provided. Ask about general reading preferences.";
 
     let prompt = "";
@@ -182,47 +167,27 @@ export async function generateInterviewQuestion(
     if (questionCount === 0) {
         prompt = INTERVIEW_INIT_PROMPT.replace("{books_context}", booksContext);
     } else {
-        const historyText = conversationHistory.map(msg => \`\${msg.role.toUpperCase()}: \${msg.content}\`).join('\\n');
-        
+        const historyText = conversationHistory.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
+
         let profileContext = "";
         let phaseInstructions = "";
-        let targetQuestions = 5;
 
         if (phase === 2 && userProfile && profileData) {
             const profileInfo = PROFILE_QUESTION_STYLES[userProfile] || {};
-            profileContext = \`
-USER PROFILE: \${userProfile.replace('_', ' ').toUpperCase()}
-Confidence: \${(profileData.confidence || 0) * 100}%
-Analysis: \${profileData.reasoning || ''}
-Strategy: \${profileData.recommended_strategy || ''}
-\`;
-            phaseInstructions = \`
-PHASE 2: ADAPTIVE DEEP-DIVE
-
-Question Style for this user:
-\${profileInfo.style || 'Use conversational questions'}
-
-Stopping Criteria: \${profileInfo.stopping_criteria || 'Sufficient information gathered'}
-
-Focus areas: pacing, emotional tone, content boundaries, character preferences, themes/tropes
-\`;
-            targetQuestions = profileInfo.target_questions || 5;
+            profileContext = `\nUSER PROFILE: ${userProfile.replace('_', ' ').toUpperCase()}\nConfidence: ${(profileData.confidence || 0) * 100}%\nAnalysis: ${profileData.reasoning || ''}\nStrategy: ${profileData.recommended_strategy || ''}\n`;
+            phaseInstructions = `\nPHASE 2: ADAPTIVE DEEP-DIVE\n\nQuestion Style for this user:\n${profileInfo.style || 'Use conversational questions'}\n\nGuidelines: ${profileInfo.guidelines || 'Follow the most interesting thread.'}\n\nStopping Criteria: ${profileInfo.stopping_criteria || 'Sufficient information gathered'}\n`;
         } else if (phase === 1) {
-            phaseInstructions = \`
-PHASE 1: TONE-SETTING
-Continue assessing communication style. After Q2, you'll adapt questions to their style.
-\`;
+            phaseInstructions = `\nPHASE 1: TONE-SETTING\nContinue assessing communication style. After Q2, you'll adapt questions to their style.\n`;
         } else {
-             phaseInstructions = "Continue with standard interview questions.";
+            phaseInstructions = "Continue with standard interview questions.";
         }
 
         prompt = INTERVIEW_FOLLOWUP_PROMPT
             .replace("{books_context}", booksContext)
             .replace("{conversation_history}", historyText)
-            .replace("{profile_context}", profileContext) // Assuming this token exists in prompt? Yes, it does
+            .replace("{profile_context}", profileContext)
             .replace("{phase}", phase.toString())
             .replace("{question_count}", questionCount.toString())
-            .replace("{target_questions}", targetQuestions.toString())
             .replace("{phase_instructions}", phaseInstructions);
     }
 
@@ -233,8 +198,9 @@ Continue assessing communication style. After Q2, you'll adapt questions to thei
     }
 
     try {
-        return parseJson(result.content);
+        const parsed = parseJson(result.content);
+        return { ...parsed, usage: result.usage };
     } catch (e: any) {
-        return { error: \`Failed to parse response: \${e}\`, raw_content: result.content };
+        return { error: `Failed to parse response: ${e}`, raw_content: result.content };
     }
 }

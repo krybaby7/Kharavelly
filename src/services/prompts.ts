@@ -1,9 +1,9 @@
-export const BASE_PROMPT = \`Search for detailed information about the plot, themes, and tropes of the following books: {user_book_list}.
+export const BASE_PROMPT = `Search for detailed information about the plot, themes, and tropes of the following books: {user_book_list}.
  
 OBJECTIVE:
 1. Synthesize the search results to understand the key narrative elements of the input books.
    - NOTE: If search results are incomplete for any book, YOU MUST USE YOUR INTERNAL KNOWLEDGE to analyze it. Do not refuse.
-2. Based on this understanding, recommend 4-6 DIFFERENT books (distinct from the input list).
+2. Based on this understanding, recommend a comprehensive list of DIFFERENT books (distinct from the input list). Do not limit the number of recommendations; provide as many high-quality matches as possible.
 3. Provide the output in strict JSON format as specified below.
 
 ANALYSIS FRAMEWORK:
@@ -71,7 +71,9 @@ Return a single JSON object with exactly three top-level keys:
       "pacing": "e.g., Fast-paced",
       "reader_need": "e.g., Escapism",
       "match_reasoning": "Detailed explanation of why this book matches the reader's preferences",
-      "confidence_score": 0.95
+      "confidence_score": 0.95,
+      "rating": 4.5,
+      "ratings_count": 12500
     }
   ]
 }
@@ -79,39 +81,39 @@ Return a single JSON object with exactly three top-level keys:
 REQUIREMENTS:
 - input_books_analysis: ARRAY with analysis of each book the user provided
 - analysis: OBJECT with common patterns found across input books
-- recommendations: ARRAY with 4-6 book recommendations (NOT the input books)
+- recommendations: ARRAY with as many high-quality book recommendations as possible (NOT the input books)
 - Output ONLY valid JSON, no text before or after
 - Do not include the input books in the recommendations array
-- Ensure all three sections are present in your response\`;
+- Ensure all three sections are present in your response`;
 
 export const PROFILE_QUESTION_STYLES: Record<string, any> = {
-    'articulate_explorer': {
-        'style': \`Use open-ended, exploratory questions. Probe nuances and subtleties.
-        Example: "What emotional journey do you crave in stories?"\`,
-        'target_questions': 5,
-        'stopping_criteria': 'Rich answers throughout, comprehensive coverage'
-    },
-    'decisive_reader': {
-        'style': \`Ask direct, targeted questions with binary choices. Be efficient.
-        Example: "Fast-paced thrillers or slow-burn character studies?"\`,
-        'target_questions': 3,
-        'stopping_criteria': 'Clear preferences stated, minimal elaboration needed'
-    },
-    'uncertain_seeker': {
-        'style': \`Provide structured options (A/B/C). Give concrete examples.
-        Example: "Which appeals most? (A) Fast action, (B) Character focus, (C) Atmospheric"\`,
-        'target_questions': 4,
-        'stopping_criteria': 'Clear choices made across key preference areas'
-    },
-    'genre_novice': {
-        'style': \`Use relatable comparisons (movies/TV). Avoid jargon. Provide context.
-        Example: "Think of a movie you loved - action or character moments?"\`,
-        'target_questions': 4,
-        'stopping_criteria': 'Enough concrete examples to build recommendations'
-    }
+  'articulate_explorer': {
+    'style': `Use open-ended, exploratory questions. Probe nuances and subtleties.
+        Example: "What emotional journey do you crave in stories?"`,
+    'guidelines': 'Aim for depth over breadth. Follow their lead on themes.',
+    'stopping_criteria': 'When you have a rich, nuanced understanding of their taste.'
+  },
+  'decisive_reader': {
+    'style': `Ask direct, targeted questions with binary choices. Be efficient.
+        Example: "Fast-paced thrillers or slow-burn character studies?"`,
+    'guidelines': 'Respect their time. Confirm key preferences quickly.',
+    'stopping_criteria': 'When specific preferences (genre, pacing, tone) are clear.'
+  },
+  'uncertain_seeker': {
+    'style': `Provide structured options (A/B/C). Give concrete examples.
+        Example: "Which appeals most? (A) Fast action, (B) Character focus, (C) Atmospheric"`,
+    'guidelines': 'Guide them gently. Validate their choices.',
+    'stopping_criteria': 'When you have a solid "safe bet" direction.'
+  },
+  'genre_novice': {
+    'style': `Use relatable comparisons (movies/TV). Avoid jargon. Provide context.
+        Example: "Think of a movie you loved - action or character moments?"`,
+    'guidelines': 'Focus on "vibes" and feelings rather than technical genres.',
+    'stopping_criteria': 'When you have enough broad strokes to recommend accessible books.'
+  }
 };
 
-export const INTERVIEW_ANALYSIS_PROMPT = \`Analyze this reader's communication style from their first 2 responses.
+export const INTERVIEW_ANALYSIS_PROMPT = `Analyze this reader's communication style from their first 2 responses.
 
 {books_context}
 
@@ -125,20 +127,20 @@ Classify into ONE profile:
 - GENRE_NOVICE: New to reading/genre, limited knowledge, asks for guidance
 
 Respond with JSON:
-{{
+{
   "user_profile": "articulate_explorer|decisive_reader|uncertain_seeker|genre_novice",
   "confidence": 0.85,
   "reasoning": "Why this profile fits based on their responses",
-  "response_characteristics": {{
+  "response_characteristics": {
     "avg_word_count": 45,
     "specificity_level": "high|medium|low",
     "confidence_indicators": ["specific examples given", "uncertain language used"]
-  }},
+  },
   "recommended_strategy": "How to adapt Phase 2 questions"
-}}
-\`;
+}
+`;
 
-export const INTERVIEW_INIT_PROMPT = \`Conduct the first phase of an adaptive book preference interview (2 questions total phase 1).
+export const INTERVIEW_INIT_PROMPT = `Conduct the first phase of an adaptive book preference interview (2 questions total phase 1).
  
 PHASE 1 GOAL: Assess the reader's communication style and readiness level.
 
@@ -154,15 +156,15 @@ Good Phase 1 openers:
 - WITHOUT BOOKS: "Tell me about a story (book/movie/TV) that resonated with you. What made it compelling?"
 
 Respond with JSON:
-{{
+{
   "question": "Your specific question",
   "reasoning": "Why this helps assess user readiness",
   "phase": 1
-}}
+}
 
-Be conversational and warm.\`;
+Be conversational and warm.`;
 
-export const INTERVIEW_FOLLOWUP_PROMPT = \`Continue the adaptive reading preference interview.
+export const INTERVIEW_FOLLOWUP_PROMPT = `Continue the adaptive reading preference interview.
  
 CONTEXT:{books_context}
 
@@ -174,43 +176,29 @@ Conversation:
 STATUS:
 - Phase: {phase}
 - Question count: {question_count}
-- Target questions: {target_questions}
-- MINIMUM questions required: 3
+- Guidelines: {phase_instructions}
 
-{phase_instructions}
+OBJECTIVE:
+Your goal is to understand the user's reading taste deeply enough to make excellent recommendations.
+Do NOT follow a checklist. Follow the conversation naturally.
 
-INFORMATION COVERAGE REQUIREMENTS:
-Before completing the interview, you MUST have gathered information about at least 4 of these 6 areas:
-1. PACING: Fast-paced vs slow-burn, action vs character-driven
-2. EMOTIONAL TONE: Comfort/escapism vs catharsis/challenge, light vs heavy themes
-3. CONTENT BOUNDARIES: Triggers to avoid, heat level preferences, sensitive topics
-4. CHARACTER TYPES: Protagonist archetypes, relationship dynamics preferences
-5. THEMES/TROPES: Specific themes they love or avoid, common tropes
-6. READING CONTEXT: When/why they read, what they seek from books
+ADAPTIVE LOGIC:
+1. Analyze the user's last response. What did it reveal? What is still unclear?
+2. If the user seemed excited about a topic, DIG DEEPER into that.
+3. If the user was vague, try a different angle or offer specific examples.
+4. If you have enough information to make 5+ high-quality recommendations with confidence, STOP.
 
-DECISION LOGIC:
-1. If question_count < 3: MUST continue (set continue_interview: true)
-2. If question_count >= 3: Review conversation history and assess coverage:
-   - Count how many of the 6 areas above have been addressed
-   - If < 4 areas covered: MUST continue asking about uncovered areas
-   - If >= 4 areas covered AND profile stopping criteria met: Can complete
-
-When continuing, ask about the MOST IMPORTANT uncovered area using the appropriate style for this user's profile.
+DECISION TO STOP (continue_interview: false):
+- You have a clear "Reader Profile" in mind.
+- You understand their preferred Tone, Pacing, and at least one core Genre/Theme.
+- You are confident you can delight them.
+- MAXIMUM questions: 10 (Force stop if count >= 10).
 
 Respond with JSON:
-{{
+{
   "continue_interview": true/false,
-  "question": "next question" (if continuing),
-  "context_summary": "detailed preferences" (if stopping),
-  "reasoning": "Explain coverage status and decision.",
-  "phase": {phase},
-  "coverage_assessment": {{
-    "pacing": true/false,
-    "emotional_tone": true/false,
-    "content_boundaries": true/false,
-    "character_types": true/false,
-    "themes_tropes": true/false,
-    "reading_context": true/false,
-    "coverage_count": 5
-  }}
-}}\`;
+  "question": "next question (if continuing)",
+  "context_summary": "brief summary of what we know so far",
+  "reasoning": "Why you decided to continue or stop",
+  "phase": {phase}
+}`;

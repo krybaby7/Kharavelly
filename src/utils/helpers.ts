@@ -42,5 +42,5 @@ export function parseJson(content: string): any {
         }
     }
 
-    throw new Error(\`Could not parse JSON. Content length: \${content.length}\`);
+    throw new Error(`Could not parse JSON. Content length: ${content.length}`);
 }

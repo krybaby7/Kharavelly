@@ -1,0 +1,6 @@
+This script will:
+1. "Sync" the changes (prebuild).
+2. "Build" the APK (assembleDebug).
+3. Install it on the connected device.
+
+Ideally we can combine this into a single command like `npm run build-android`.

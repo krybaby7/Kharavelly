@@ -21,6 +21,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "package": "com.novelly.app",
       "predictiveBackGestureEnabled": false
     },
     "web": {

@@ -31,23 +31,17 @@ export const bookService = {
                 // Helper to merge? For now, if Google returns valid, prefer Google full details 
                 // as it usually has description + cover.
                 book = {
-                    title: title, // Use user query title or Google's? Google's usually better formatted.
-                    // Actually googleBooksService.searchBook returns { description, coverImage } partial.
-                    // Let's assume we need to normalize googleBooksService to return full structure or map it here.
-                    // Checking googleBooks.ts... it returns { description, coverImage } only.
-                    // We need to construct a full Book object.
-
-                    // Google service partial doesn't return author currently in that function signature result?
-                    // Wait, checking googleBooks.ts content from memory... 
-                    // processGoogleBookItem returns { description, coverImage }. It swallows title/author!
-                    // I should probably update googleBooksService to return full info or just map what I can.
-
+                    title: googleBook.title || title,
+                    author: googleBook.author || 'Unknown',
                     ...googleBook,
-                    // defaults
-                    status: 'read',
-                    tropes: [],
-                    rating: 0
-                } as Book; // Cast for now, will fix typing if needed.
+                    // defaults if not in googleBook
+                    status: book?.status || 'read',
+                    tropes: book?.tropes || [],
+                    // Do not overwrite rating if it exists
+                    rating: googleBook.rating || 0,
+                    ratings_count: googleBook.ratings_count || 0,
+                    rating_source: googleBook.rating_source,
+                } as Book;
             }
         }
 
@@ -59,6 +53,8 @@ export const bookService = {
                 status: 'read',
                 tropes: [],
                 rating: 0,
+                rating_source: undefined,
+                ratings_count: 0,
                 description: 'No description found.',
                 coverImage: null
             };

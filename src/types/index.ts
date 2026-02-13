@@ -28,6 +28,7 @@ export interface Book {
     total_pages?: number; // Total pages
     rating?: number; // 1-5 stars
     ratings_count?: number; // Total number of ratings
+    rating_source?: string; // Source of the rating (e.g., 'Google Books')
 }
 
 export interface PerplexityResponse {

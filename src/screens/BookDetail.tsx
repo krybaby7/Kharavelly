@@ -18,19 +18,45 @@ export const BookDetailScreen = ({ route, navigation }: any) => {
     const [loading, setLoading] = useState(false);
     const [description, setDescription] = useState(book.description);
     const [coverImage, setCoverImage] = useState(book.coverImage);
+    const [rating, setRating] = useState(book.rating || 0);
+    const [ratingsCount, setRatingsCount] = useState(book.ratings_count || 0);
+    const [ratingSource, setRatingSource] = useState(book.rating_source);
 
     React.useEffect(() => {
         const fetchDetails = async () => {
-            if (!description || !coverImage) {
+            // Fetch if crucial details are missing OR if we want to ensure we have rating data
+            // Only fetch if we don't have a source yet, or if description/cover is missing
+            if (!description || !coverImage || !ratingSource) {
                 const details = await googleBooksService.searchBook(book.title, book.author);
                 if (details) {
                     if (!description && details.description) setDescription(details.description);
                     if (!coverImage && details.coverImage) setCoverImage(details.coverImage);
+                    if (details.rating) setRating(details.rating);
+                    if (details.ratings_count) setRatingsCount(details.ratings_count);
+                    if (details.rating_source) setRatingSource(details.rating_source);
                 }
             }
         };
         fetchDetails();
     }, [book.title, book.author]);
+
+    const renderStars = (r: number) => {
+        const stars = [];
+        for (let i = 1; i <= 5; i++) {
+            let name: any = 'star';
+            if (i > r) {
+                if (i - 0.5 <= r) {
+                    name = 'star-half';
+                } else {
+                    name = 'star-outline';
+                }
+            }
+            stars.push(
+                <Ionicons key={i} name={name} size={16} color="#FFD700" />
+            );
+        }
+        return stars;
+    };
 
     const handleAddToLibrary = async (status: 'read' | 'tbr' | 'reading') => {
         setLoading(true);
@@ -55,9 +81,18 @@ export const BookDetailScreen = ({ route, navigation }: any) => {
                 </TouchableOpacity>
 
                 <View style={styles.headerContent}>
-                    <Text style={styles.title}>{book.title}</Text>
+                    <Text style={styles.title} numberOfLines={2} adjustsFontSizeToFit>{book.title}</Text>
                     <Text style={styles.author}>{book.author}</Text>
-                </View>
+
+                    {/* Rating Section */}
+                    <View style={styles.ratingContainer}>
+                        <View style={styles.starRow}>
+                            {renderStars(rating)}
+                        </View>
+                        {rating > 0 && <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>}
+                        {ratingsCount > 0 && <Text style={styles.ratingCount}>({ratingsCount})</Text>}
+                        {ratingSource && <Text style={styles.sourceText}>via {ratingSource}</Text>}
+                    </View>                </View>
             </View>
 
             <View style={styles.content}>
@@ -213,6 +248,39 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: 18,
         color: 'rgba(255,255,255,0.9)',
         fontFamily: FONTS.regular,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+        marginBottom: 8,
+    },
+    ratingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    starRow: {
+        flexDirection: 'row',
+        gap: 2,
+    },
+    ratingText: {
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 14,
+        fontWeight: 'bold',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10
+    },
+    ratingCount: {
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: 12,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10
+    },
+    sourceText: {
+        color: 'rgba(255,255,255,0.5)',
+        fontSize: 10,
+        fontStyle: 'italic',
         textShadowColor: 'rgba(0, 0, 0, 0.75)',
         textShadowOffset: { width: -1, height: 1 },
         textShadowRadius: 10

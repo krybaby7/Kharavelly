@@ -45,6 +45,7 @@ function processGoogleBookItem(item: GoogleBookVolume) {
         tropes: [],
         rating: bookInfo.averageRating || 0,
         ratings_count: bookInfo.ratingsCount || 0,
+        rating_source: 'Google Books',
         total_pages: bookInfo.pageCount
     };
 }
@@ -137,7 +138,8 @@ export const googleBooksService = {
                         description: book.description || details.description,
                         coverImage: book.coverImage || details.coverImage,
                         rating: details.rating || book.rating,
-                        ratings_count: details.ratings_count || book.ratings_count
+                        ratings_count: details.ratings_count || book.ratings_count,
+                        rating_source: details.rating_source || book.rating_source
                     });
                 } else {
                     hydratedBooks.push(book);

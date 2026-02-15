@@ -61,6 +61,26 @@ const RecResultItem = ({ item, onPress }: { item: Book; onPress: (book: Book) =>
                     {item.ratings_count ? item.ratings_count.toLocaleString() : '0'} ratings
                 </Text>
 
+                {item.match_reasoning && (
+                    <View style={styles.reasoningContainer}>
+                        <Text style={styles.reasoningLabel}>WHY THIS MATCHES:</Text>
+                        <Text style={styles.reasoningText} numberOfLines={3}>{item.match_reasoning}</Text>
+                    </View>
+                )}
+
+                <View style={styles.tagsContainer}>
+                    {item.tropes && item.tropes.slice(0, 2).map((trope, index) => (
+                        <View key={`trope-${index}`} style={styles.tagChip}>
+                            <Text style={styles.tagText}>{trope}</Text>
+                        </View>
+                    ))}
+                    {item.themes && item.themes.slice(0, 1).map((theme, index) => (
+                        <View key={`theme-${index}`} style={styles.tagChip}>
+                            <Text style={styles.tagText}>{theme}</Text>
+                        </View>
+                    ))}
+                </View>
+
                 <View style={styles.wantToReadBtn}>
                     <Text style={styles.wantToReadText}>Want to Read</Text>
                     <Ionicons name="chevron-down" size={16} color="#fff" />
@@ -231,6 +251,51 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: '#fff',
         fontSize: 14,
         fontWeight: '600',
+    },
+    reasoningContainer: {
+        marginTop: 8,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        padding: 8,
+        borderRadius: 6,
+        borderLeftWidth: 2,
+        borderLeftColor: colors.primary,
+        marginBottom: 8,
+    },
+    reasoningLabel: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: colors.primary,
+        marginBottom: 4,
+        fontFamily: FONTS.bold,
+        letterSpacing: 0.5,
+    },
+    reasoningText: {
+        fontSize: 12,
+        color: colors.text,
+        fontFamily: FONTS.regular,
+        lineHeight: 18,
+        fontStyle: 'italic',
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginBottom: 12,
+        gap: 6,
+    },
+    tagChip: {
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        marginRight: 4,
+        marginBottom: 4,
+    },
+    tagText: {
+        fontSize: 10,
+        color: colors.textLight,
+        fontFamily: FONTS.regular,
     },
     emptyContainer: {
         flex: 1,

@@ -35,14 +35,21 @@ export const InterviewScreen = ({ navigation }: any) => {
     const [questionCount, setQuestionCount] = useState(0);
     const [userProfile, setUserProfile] = useState<any>(null);
     const [completed, setCompleted] = useState(false);
-    const [totalCost, setTotalCost] = useState(0);
+
+    // const [totalCost, setTotalCost] = useState(0); // Removing state based cost
+    const totalCostRef = useRef(0); // Use ref for accurate cost tracking
+    const [displayCost, setDisplayCost] = useState(0); // For UI display only
 
     const scrollViewRef = useRef<ScrollView>(null);
     const insets = useSafeAreaInsets(); // Hook for safe area
 
     // Remove auto-start useEffect since we have a setup phase now
 
+    // Store context books for recommendation phase
+    const contextBooksRef = useRef<string[]>([]);
+
     const startSession = async (books: string[] = []) => {
+        contextBooksRef.current = books;
         setLoading(true);
         // Transition to interview view immediately to show loading state there
         setSetupPhase('interview');
@@ -57,7 +64,8 @@ export const InterviewScreen = ({ navigation }: any) => {
             if (result.usage) {
                 const cost = calculateCost(CONFIG.PERPLEXITY_MODEL, result.usage);
                 console.log("Initial Question Cost:", cost);
-                setTotalCost(prev => prev + cost);
+                totalCostRef.current += cost;
+                setDisplayCost(totalCostRef.current);
             }
         } else if (result && result.error) {
             setHistory([{ role: 'assistant', content: "Error starting interview. Please check API Key." }]);
@@ -101,7 +109,8 @@ export const InterviewScreen = ({ navigation }: any) => {
                 if (analysis.usage) {
                     const cost = calculateCost(CONFIG.PERPLEXITY_MODEL, analysis.usage);
                     console.log("Analysis Cost:", cost);
-                    setTotalCost(prev => prev + cost);
+                    totalCostRef.current += cost;
+                    setDisplayCost(totalCostRef.current);
                 }
                 // Could show a toast about adapting style
             }
@@ -124,15 +133,37 @@ export const InterviewScreen = ({ navigation }: any) => {
             if (result.usage) {
                 const cost = calculateCost(CONFIG.PERPLEXITY_MODEL, result.usage);
                 console.log("Question Cost:", cost);
-                setTotalCost(prev => prev + cost);
+                totalCostRef.current += cost;
+                setDisplayCost(totalCostRef.current);
             }
 
             if (result.continue_interview) {
                 setHistory(prev => [...prev, { role: 'assistant', content: result.question }]);
             } else {
-                // Interview logic says we are done, BUT we want to force one last "Anything else?" question
-                setFinalQuestionAsked(true);
-                setHistory(prev => [...prev, { role: 'assistant', content: "Is there anything else you would like to add or clarify to help me find the perfect book for you?" }]);
+                // The prompt now includes the "Anything else?" question as the final question
+                // So if continue_interview is false, it means we are done prompting
+                // But wait, if continue_interview is false, `result.question` might be the "Anything else?" question?
+                // The prompt says: "your final question ... should explicitly be: 'Is there anything else...'"
+                // And "continue_interview": boolean.
+                // If it returns true, it asks the next question.
+                // If it returns false, it means it's ready to recommend?
+                // The prompt says "continue_interview: boolean // true if more info is needed, false if ready to recommend"
+
+                // If false, we should probably still show the last question if there is one?
+                // Actually, if false, we might want to transition to a "Ready" state?
+                // But the user needs to answer "No" to "Anything else?".
+
+                // Let's assume if continue_interview is false, we are done.
+                // But we need to give the user a chance to say "No, that's it".
+
+                // Actually, the prompt says "final question ... should explicitly be ...".
+                // So `continue_interview` might still be true when asking that question?
+                // Or maybe `continue_interview` becomes false AFTER the user answers that question?
+
+                // Let's modify: If `result.next_question` contains "Anything else", we are at the end.
+
+                setHistory(prev => [...prev, { role: 'assistant', content: result.question || "I have enough information. Ready to see your recommendations?" }]);
+                setCompleted(true);
             }
         }
     };
@@ -149,25 +180,26 @@ export const InterviewScreen = ({ navigation }: any) => {
             .map(m => m.content)
             .join('\n');
 
-        const prompt = buildRecommendationPrompt([], 'Full Interview', undefined, interviewContext);
+        const prompt = buildRecommendationPrompt(
+            contextBooksRef.current, // Use stored context books
+            'Full Interview',
+            undefined,
+            interviewContext, // Transcript
+            userProfile?.user_profile // Pass the generated profile
+        );
         // Use sonar-deep-research for the final recommendation generation as requested
         const deepModel = 'sonar-deep-research';
         const result = await callPerplexity(prompt, deepModel, DEMO_API_KEY);
 
         if (result.success && result.content) {
+            let finalTotalCost = totalCostRef.current;
             if (result.usage) {
                 const cost = calculateCost(deepModel, result.usage);
                 console.log("Rec Cost:", cost);
-                setTotalCost(prev => prev + cost);
+                totalCostRef.current += cost;
+                finalTotalCost = totalCostRef.current;
+                setDisplayCost(finalTotalCost);
             }
-            // Pass totalCost (need to use functional update value or ref if state updates aren't immediate? 
-            // setTotalCost updates state for NEXT render. We want current + new.
-            // Actually, `totalCost` variable in scope is old. 
-            // For now, I'll calculate final cost to pass locally.
-            // Wait, state update is async.
-            // I should verify `result.usage` exists and add it to `totalCost` variable locally before nav.
-            const recCost = result.usage ? calculateCost(deepModel, result.usage) : 0;
-            const finalTotalCost = totalCost + recCost; // totalCost from closure (before this deep research) + this call.
 
             setLoadingMessage("Found recommendations. Fetching book details...");
             try {
@@ -177,12 +209,19 @@ export const InterviewScreen = ({ navigation }: any) => {
                         data.recommendations,
                         (status) => setLoadingMessage(status)
                     );
-                    await HistoryService.saveHistory('interview', interviewContext, hydratedRecs, data.analysis?.reader_profile, finalTotalCost);
+                    // Pass the profile or intro text
+                    // If we have data.analysis.reader_profile from this call, use it.
+                    // Otherwise fall back to userProfile?.user_profile or just empty.
+                    // The prompt ensures "intro_text" is returned or "reader_profile" inside "analysis"?
+                    // The new RECOMMENDATION_PROMPT returns "intro_text".
+                    const introText = data.intro_text || userProfile?.user_profile;
+
+                    await HistoryService.saveHistory('interview', interviewContext, hydratedRecs, introText, finalTotalCost);
                     setLoading(false);
                     setLoadingMessage(null);
                     navigation.navigate('RecResults', {
                         recommendations: hydratedRecs,
-                        introText: data.analysis?.reader_profile,
+                        introText: introText,
                         totalCost: finalTotalCost
                     });
                 } else {

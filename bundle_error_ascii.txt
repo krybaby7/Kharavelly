@@ -1,0 +1,18 @@
+node.exe : [31m[1merror[22m[39m [0mCannot resolve `@react-native/metro-config`. Ensure it is listed in your project's `devDependencies`.[0m
+At C:\Program Files\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([31m[1merror...endencies`.[0m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[0mError: Cannot resolve `@react-native/metro-config`. Ensure it is listed in your project's `devDependencies`.
+    at loadMetroConfig (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native\community-cli-plugin\dist\utils\loadMetroConfig.js:62:11)
+    at Object.buildBundle [as func] (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native\community-cli-plugin\dist\commands\bundle\buildBundle.js:22:53)
+    at Command.handleAction (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\build\index.js:139:23)
+    at Command.listener [as _actionHandler] (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\node_modules\commander\lib\command.js:482:17)
+    at C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\node_modules\commander\lib\command.js:1283:65
+    at Command._chainOrCall (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\node_modules\commander\lib\command.js:1177:12)
+    at Command._parseCommand (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\node_modules\commander\lib\command.js:1283:27)
+    at C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\node_modules\commander\lib\command.js:1081:27
+    at Command._chainOrCall (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\node_modules\commander\lib\command.js:1177:12)
+    at Command._dispatchSubcommand (C:\Users\adami\Downloads\Trobescrayeb-main\Novelly\node_modules\@react-native-community\cli\node_modules\commander\lib\command.js:1077:23)[0m

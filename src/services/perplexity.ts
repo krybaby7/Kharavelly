@@ -1,5 +1,6 @@
 import {
-    BASE_PROMPT,
+    RECOMMENDATION_PROMPT,
+    ANALYSIS_PROMPT,
     INTERVIEW_ANALYSIS_PROMPT,
     INTERVIEW_INIT_PROMPT,
     INTERVIEW_FOLLOWUP_PROMPT,
@@ -65,65 +66,25 @@ export function buildRecommendationPrompt(
     booksList: string[],
     mode: RecommendationMode,
     contextInput?: string,
-    interviewContext?: string
+    interviewContext?: string,
+    readerProfile?: string
 ): string {
-    if (mode === "Full Interview" && interviewContext && (!booksList || booksList.length === 0)) {
-        return `Task: Based solely on the user's interview responses below, recommend a comprehensive list of books.
+    // Default profile if none provided (e.g. for Quick Recs)
+    let profileText = readerProfile || "User enjoys the themes and styles present in the provided context books.";
 
-TASK: Based solely on the user's interview responses, recommend as many high-quality books as possible that match their preferences. Do not limit the number.
-
-USER PREFERENCES (from interview):
-${interviewContext}
-
-CRITICAL - OUTPUT FORMAT:
-You MUST return EXACTLY this structure. Do NOT return analysis fields at the top level.
-
-CORRECT structure (use this):
-{
-  "analysis": {
-    "reader_profile": "A candid introduction paragraph explaining honestly how you interpreted the user's responses and selected these specific books. Address the user directly."
-  },
-  "recommendations": [
-    {
-      "title": "recommended book 1 title",
-      "author": "author name",
-      "tropes": ["trope1", "trope2"],
-      "themes": ["theme1", "theme2"],
-      "microthemes": ["micro1", "micro2"],
-      "relationship_dynamics": {
-        "romantic": "description",
-        "platonic": "description",
-        "familial": "description",
-        "rivalries": "description"
-      },
-      "pacing": "e.g., Fast-paced",
-      "reader_need": "e.g., Escapism",
-      "match_reasoning": "Detailed explanation of how this book aligns with the interview responses",
-      "confidence_score": 0.95
+    // For Full Interview, if we don't have a profile yet, we synthesize one from the interview context
+    if (mode === "Full Interview" && interviewContext && !readerProfile) {
+        profileText = `Based on interview: ${interviewContext}`;
     }
-  ]
-}
-
-Your response MUST have these TWO top-level keys ONLY:
-1. "analysis" - an OBJECT containing reader_profile
-2. "recommendations" - an ARRAY of book objects (comprehensive list)
-
-Output ONLY valid JSON starting with {. No text before or after.
-Base recommendations entirely on interview preferences.`;
+    else if (mode === "Books + Context" && contextInput) {
+        profileText += `\nSpecific Request: ${contextInput}`;
     }
 
-    let prompt = BASE_PROMPT.replace("{user_book_list}", booksList.join(', '));
+    const contextBooks = booksList.join(', ');
 
-    if (mode === "Books + Context" && contextInput && contextInput.trim()) {
-        const contextSection = `\n\nADDITIONAL USER CONTEXT:\nThe user has provided the following preferences:\n\n${contextInput}\n\nPlease incorporate these preferences into your analysis and recommendations.\nPrioritize books that align with both the input book patterns AND these stated preferences.\n`;
-        prompt = prompt.replace("CRITICAL - OUTPUT FORMAT:", contextSection + "\n\nCRITICAL - OUTPUT FORMAT:");
-    }
-    else if (mode === "Full Interview" && interviewContext) {
-        const interviewSection = `\n\nDETAILED USER PREFERENCES (from interview):\n\n${interviewContext}\n\nThese preferences were gathered through an adaptive interview and should be the PRIMARY\ndriver of recommendations. Use input books as secondary context for genre/style preferences.\n\nWhen making recommendations:\n1. Prioritize alignment with stated preferences\n2. Use input books to understand reading history\n3. Ensure recommendations respect content preferences mentioned\n4. Explain how each recommendation aligns with specific interview insights\n`;
-        prompt = prompt.replace("CRITICAL - OUTPUT FORMAT:", interviewSection + "\n\nCRITICAL - OUTPUT FORMAT:");
-    }
-
-    return prompt;
+    return RECOMMENDATION_PROMPT
+        .replace("{reader_profile}", profileText)
+        .replace("{context_books}", contextBooks || "None provided");
 }
 
 export async function analyzeUserProfile(conversationHistory: any[], booksList: string[], model: string, apiKey: string) {

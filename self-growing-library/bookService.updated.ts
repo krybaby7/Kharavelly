@@ -1,8 +1,20 @@
+// ============================================================
+// Book Service — Updated with Catalog Integration
+// ============================================================
+// Every book that flows through this service is automatically
+// registered in the catalog. The catalog handles enrichment.
+//
+// Flow:
+//   1. findBook() → search Google/OL for cover+rating → catalog.ensureInCatalog()
+//   2. hydrateBooksList() → batch process recommendations → catalog.batchExtractAndStore()
+//   3. Return enriched book with both external data AND catalog metadata
+// ============================================================
+
 import { googleBooksService } from './googleBooks';
 import { openLibraryService } from './openLibrary';
-import { catalogService } from './catalog'; // NEW: Catalog service
+import { catalogService } from './catalog';
 import { Book } from '../types';
-import { BookCatalogEntry, makeCatalogKey } from '../types/catalog'; // NEW: Catalog types
+import { BookCatalogEntry, makeCatalogKey } from '../types/catalog';
 
 // Simple in-memory cache to prevent re-fetching same queries in session
 const MEMORY_CACHE: Record<string, Book> = {};
@@ -20,12 +32,8 @@ function mergeWithCatalog(book: Partial<Book>, catalog: BookCatalogEntry): Book 
         status: book.status || 'recommended',
         tropes: catalog.tropes || book.tropes || [],
         themes: catalog.themes || book.themes || [],
-        microthemes: book.microthemes || [], // Deprecated
-        mood: catalog.mood_emotions || book.mood || [], // Map mood_emotions to mood
-        character_archetypes: catalog.character_archetypes || book.character_archetypes || [],
-        content_warnings: catalog.content_warnings ? catalog.content_warnings.map(w => w.category) : (book.content_warnings || []),
-        perfect_for: catalog.perfect_for || book.perfect_for,
-        quote: catalog.memorable_quote || book.quote,
+        microthemes: catalog.mood_emotions || book.microthemes || [],     // map mood_emotions → microthemes for UI
+        relationship_dynamics: catalog.relationship_dynamics as any || book.relationship_dynamics || {},
         pacing: catalog.pacing || book.pacing,
         reader_need: catalog.reader_need || book.reader_need,
         rating: book.rating || catalog.rating as number || 0,
@@ -46,7 +54,7 @@ function mergeWithCatalog(book: Partial<Book>, catalog: BookCatalogEntry): Book 
             subgenres: catalog.subgenres,
             characterization: catalog.characterization,
             writing_style: catalog.writing_style,
-            character_archetypes: catalog.character_archetypes,
+            protagonist_types: catalog.protagonist_types,
             content_warnings: catalog.content_warnings,
             emotional_impact: catalog.emotional_impact,
             setting: catalog.setting,
@@ -67,98 +75,75 @@ function mergeWithCatalog(book: Partial<Book>, catalog: BookCatalogEntry): Book 
 export const bookService = {
     /**
      * Search for a book using Open Library first, then Google Books as fallback.
+     * Automatically registers the book in the catalog.
      */
-    findBook: async (title: string): Promise<Book> => {
-        const cacheKey = title.toLowerCase().trim();
+    findBook: async (title: string, author?: string): Promise<Book> => {
+        const cacheKey = `${title.toLowerCase().trim()}|${(author || '').toLowerCase().trim()}`;
         if (MEMORY_CACHE[cacheKey]) {
             console.log(`[BookService] Cache hit for: ${title}`);
             return MEMORY_CACHE[cacheKey];
         }
 
-        // 1. Try Open Library
-        let book = await openLibraryService.searchBook(title);
+        // 1. Get external data (cover, rating, description, page count)
+        let externalData: any = null;
 
-        // 2. Logic: If no book found OR book found but missing cover (quality check) -> Fallback
-        if (!book || !book.coverImage) {
-            console.log(`[BookService] OpenLibrary failed or poor quality for "${title}". Falling back to Google.`);
-            const googleBook = await googleBooksService.searchBook(title, '');
+        // Try Open Library first
+        const olBook = await openLibraryService.searchBook(title, author);
 
-            if (googleBook) {
-                // If we had a partial OL match (e.g. title but no cover), and Google failed, we stick with OL.
-                // But if Google returns checks out, we use Google.
+        // Try Google Books (usually has better covers + ratings)
+        const googleBook = await googleBooksService.searchBook(title, author || '');
 
-                // Helper to merge? For now, if Google returns valid, prefer Google full details 
-                // as it usually has description + cover.
-                book = {
-                    ...googleBook,
-                    // defaults if not in googleBook
-                    status: book?.status || 'read',
-                    tropes: book?.tropes || [],
-                    // Do not overwrite rating if it exists
-                    rating: googleBook.rating || 0,
-                    ratings_count: googleBook.ratings_count || 0,
-                    rating_source: googleBook.rating_source,
-                } as Book;
-            }
-        }
-
-        if (!book) {
-            // Absolute failure
-            book = {
-                title: title,
-                author: 'Unknown',
-                status: 'read',
-                tropes: [],
-                themes: [],
-                microthemes: [],
-                mood: [],
-                character_archetypes: [],
-                content_warnings: [],
-                rating: 0,
-                rating_source: undefined,
-                ratings_count: 0,
-                description: 'No description found.',
-                coverImage: undefined
-            };
-        }
+        // Merge external data, preferring Google for covers/ratings
+        externalData = {
+            title: googleBook?.title || olBook?.title || title,
+            author: googleBook?.author || olBook?.author || author || 'Unknown',
+            description: googleBook?.description || '',
+            coverImage: googleBook?.coverImage || olBook?.coverImage || null,
+            rating: googleBook?.rating || 0,
+            ratings_count: googleBook?.ratings_count || 0,
+            rating_source: googleBook?.rating_source || undefined,
+            total_pages: googleBook?.total_pages || undefined,
+        };
 
         // 2. Register in catalog (this enriches with metadata if not already there)
-        //    skipEnrichment=true because we'll batch-enrich later during hydration if needed
+        //    skipEnrichment=true because we'll batch-enrich later during hydration
         const catalogEntry = await catalogService.ensureInCatalog(
-            book.title,
-            book.author,
+            externalData.title,
+            externalData.author,
             {
-                cover_image: book.coverImage || null,
-                description: book.description,
-                rating: book.rating,
-                ratings_count: book.ratings_count,
-                rating_source: book.rating_source,
-                page_count: book.total_pages,
+                cover_image: externalData.coverImage,
+                description: externalData.description,
+                rating: externalData.rating,
+                ratings_count: externalData.ratings_count,
+                rating_source: externalData.rating_source,
+                page_count: externalData.total_pages,
             },
-            true // skipEnrichment
+            true // skipEnrichment — we're just registering with external data
         );
 
         // 3. Merge catalog metadata with external data for display
-        const merged = mergeWithCatalog(book, catalogEntry);
+        const book = mergeWithCatalog(externalData, catalogEntry);
 
-        MEMORY_CACHE[cacheKey] = merged;
-        return merged;
+        MEMORY_CACHE[cacheKey] = book;
+        return book;
     },
 
     /**
-     * Bulk verify a list of titles strings into Book objects.
+     * Bulk verify a list of title strings into Book objects.
      */
     verifyBooks: async (titles: string[]): Promise<Book[]> => {
-        const results: Book[] = [];
-        // Sequential to be nice to APIs? Or Parallel?
-        // Parallel Open Library is fine.
-
         const promises = titles.map(t => bookService.findBook(t));
-        const books = await Promise.all(promises);
-
-        return books;
+        return Promise.all(promises);
     },
 
+    /**
+     * Hydrate a list of raw recommendation results with covers, ratings, AND catalog metadata.
+     *
+     * This is the main integration point. It:
+     * 1. Batch-extracts metadata for all new books via one Perplexity call
+     * 2. Fetches covers/ratings from Google Books
+     * 3. Merges everything together
+     */
     hydrateBooksList: async (
         books: any[],
         onProgress?: (status: string) => void
@@ -247,9 +232,7 @@ export const bookService = {
                             tropes: book.tropes || [],
                             themes: book.themes || [],
                             microthemes: book.microthemes || [],
-                            mood: book.mood || [],
-                            character_archetypes: book.character_archetypes || [],
-                            content_warnings: book.content_warnings || [],
+                            relationship_dynamics: book.relationship_dynamics || {},
                             status: book.status || 'recommended',
                         };
 
@@ -266,9 +249,7 @@ export const bookService = {
                         tropes: book.tropes || [],
                         themes: book.themes || [],
                         microthemes: book.microthemes || [],
-                        mood: book.mood || [],
-                        character_archetypes: book.character_archetypes || [],
-                        content_warnings: book.content_warnings || [],
+                        relationship_dynamics: book.relationship_dynamics || {},
                         status: book.status || 'recommended',
                     };
                 }
@@ -292,5 +273,5 @@ export const bookService = {
         );
 
         return hydratedBooks;
-    }
+    },
 };

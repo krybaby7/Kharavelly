@@ -56,20 +56,20 @@ Return a single JSON object (no markdown, no other text):
       "author": "Author Name",
       "tropes": ["trope1", "trope2", "trope3"],
       "themes": ["theme1", "theme2"],
-      "microthemes": ["micro1", "micro2"],
-      "relationship_dynamics": {
-         "romantic": "description or null",
-         "platonic": "description or null",
-         "familial": "description or null"
-      },
+      "mood": ["mood1", "mood2"],
+      "character_archetypes": ["archetype1", "archetype2"],
+      "content_warnings": ["warning1", "warning2"],
       "pacing": "Fast/Slow/Medium",
       "reader_need": "The emotional need this satisfies",
+      "perfect_for": "Who this book is perfect for (1 sentence)",
+      "quote": "A short, memorable quote from the book (optional, null if unknown)",
       "match_reasoning": "A compelling, personalized explanation of why this fits the user's profile. Mention specific elements from their profile.",
       "confidence_score": 0.95 (number between 0-1)
     }
   ],
   "intro_text": "A brief, friendly opening sentence acknowledging their taste (e.g., 'Based on your love for dark academia...')."
-}`;
+}
+`;
 
 export const PROFILE_QUESTION_STYLES: Record<string, any> = {
   'articulate_explorer': {
@@ -186,4 +186,52 @@ Respond with JSON:
   "context_summary": "brief summary of what we know so far",
   "reasoning": "Why you decided to continue or stop",
   "phase": {phase}
-}`;
+}
+`;
+
+export const HOMEPAGE_FEED_PROMPT = `Generate a curated list of book recommendations for a homepage feed based on the following genres: {genres}.
+If genres are "General" or empty, provide a diverse mix of popular genres.
+
+Output a JSON object with the following sections:
+1. "new_releases": 5 recently published books (last 6 months) in these genres.
+2. "popular": 5 highly rated/popular books currently trending in these genres.
+3. "award_winning": 5 books that have won major awards (Hugo, Nebula, Pulitzer, Booker, etc.) in these genres.
+4. "hidden_gems": 5 highly rated but less known books in these genres.
+
+REQUIRED JSON OUTPUT FORMAT:
+{
+  "new_releases": [
+    { "title": "Title", "author": "Author", "genre": "Genre" }
+  ],
+  "popular": [
+    { "title": "Title", "author": "Author", "genre": "Genre" }
+  ],
+  "award_winning": [
+    { "title": "Title", "author": "Author", "genre": "Genre" }
+  ],
+  "hidden_gems": [
+    { "title": "Title", "author": "Author", "genre": "Genre" }
+  ]
+}
+Return ONLY valid JSON. No markdown, no intro/outro text.`;
+
+export const HOMEPAGE_NEWS_PROMPT = `Find 5 recent, interesting news articles, blog posts, or author interviews related to books, reading, or publishing.
+Focus on:
+- Upcoming highly anticipated releases
+- Author interviews or profiles
+- Literary prize announcements
+- Trends in the book world
+
+REQUIRED JSON OUTPUT FORMAT:
+{
+  "news": [
+    {
+      "title": "Headline",
+      "summary": "Brief 1-sentence summary",
+      "url": "Link to article (if available, otherwise null)",
+      "source": "Source Name (e.g. NYT, Guardian, Tor.com)",
+      "date": "Date string (e.g. 'Oct 12, 2023')"
+    }
+  ]
+}
+Return ONLY valid JSON. No markdown.`;

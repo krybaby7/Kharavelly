@@ -52,9 +52,11 @@ export const LightTheme = {
 export const COLORS = DarkTheme;
 
 export const FONTS = {
-    regular: 'System',
-    bold: 'System', // Ideally 'Playfair Display' or similar if loaded
-    mono: 'System', // Fallback for monospace
+    regular: 'Inter_400Regular',
+    medium: 'Inter_600SemiBold',
+    bold: 'Inter_700Bold',
+    heading: 'PlayfairDisplay_700Bold',
+    headingRegular: 'PlayfairDisplay_400Regular',
 };
 
 export const SPACING = {

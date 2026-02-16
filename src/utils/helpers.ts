@@ -17,13 +17,21 @@ export function parseJson(content: string): any {
         // Ignore
     }
 
-    // Extract from markdown code blocks
-    const match = cleanContent.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (match) {
+    // Extract from markdown code blocks (robustly)
+    // Match everything between ``` and ```, ignoring language tag
+    const codeBlockMatch = cleanContent.match(/```(?:json)?([\s\S]*?)```/);
+    if (codeBlockMatch) {
+        // If code block found, try to parse its content
+        // We recursively call parseJson on the inner content to handle potential thinking tags inside? 
+        // No, thinking tags already stripped.
+        // Just try parse, or let it fall through to brace matching on the inner content?
+        // Let's try direct parse of the block content first.
+        const inner = codeBlockMatch[1].trim();
         try {
-            return JSON.parse(match[1]);
+            return JSON.parse(inner);
         } catch (e) {
-            // Ignore
+            // failed to parse inner content directly, try finding braces inside it
+            cleanContent = inner;
         }
     }
 

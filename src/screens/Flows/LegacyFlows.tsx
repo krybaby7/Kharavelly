@@ -24,27 +24,34 @@ export const QuickRecsScreen = ({ navigation }: any) => {
     const handleGetRecs = async (titles: string[]) => {
         setLoading(true);
 
-        const booksList = titles;
-        const prompt = buildRecommendationPrompt(booksList, 'Quick Recs');
+        try {
+            const booksList = titles;
+            const prompt = buildRecommendationPrompt(booksList, 'Quick Recs');
 
-        const result = await callPerplexity(prompt, CONFIG.PERPLEXITY_MODEL, DEMO_API_KEY);
-        setLoading(false);
+            const result = await callPerplexity(prompt, CONFIG.PERPLEXITY_MODEL, DEMO_API_KEY);
 
-        if (result.success && result.content) {
-            try {
-                const data: PerplexityResponse = parseJson(result.content);
-                if (data.recommendations && data.recommendations.length > 0) {
-                    const hydratedRecs = await bookService.hydrateBooksList(data.recommendations);
-                    await HistoryService.saveHistory('quick', booksList.join(', '), hydratedRecs);
-                    navigation.navigate('RecResults', { recommendations: hydratedRecs });
-                } else {
-                    Alert.alert("No recommendations found.");
+            if (result.success && result.content) {
+                try {
+                    const data: PerplexityResponse = parseJson(result.content);
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        const hydratedRecs = await bookService.hydrateBooksList(data.recommendations);
+                        await HistoryService.saveHistory('quick', booksList.join(', '), hydratedRecs);
+                        navigation.navigate('RecResults', { recommendations: hydratedRecs });
+                    } else {
+                        Alert.alert("No recommendations found.");
+                    }
+                } catch (e) {
+                    console.error("Parse error:", e);
+                    Alert.alert("Error", "Could not parse recommendations.");
                 }
-            } catch (e) {
-                Alert.alert("Error", "Could not parse recommendations.");
+            } else {
+                Alert.alert("Error", result.error || "Failed to fetch recommendations.");
             }
-        } else {
-            Alert.alert("Error", result.error || "Failed to fetch recommendations.");
+        } catch (error) {
+            console.error(error);
+            Alert.alert("Error", "An unexpected error occurred.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -77,27 +84,34 @@ export const ContextRecsScreen = ({ navigation }: any) => {
         }
 
         setLoading(true);
-        const booksList = bookTitles;
-        const prompt = buildRecommendationPrompt(booksList, 'Books + Context', contextInput);
+        try {
+            const booksList = bookTitles;
+            const prompt = buildRecommendationPrompt(booksList, 'Books + Context', contextInput);
 
-        const result = await callPerplexity(prompt, CONFIG.PERPLEXITY_MODEL, DEMO_API_KEY);
-        setLoading(false);
+            const result = await callPerplexity(prompt, CONFIG.PERPLEXITY_MODEL, DEMO_API_KEY);
 
-        if (result.success && result.content) {
-            try {
-                const data: PerplexityResponse = parseJson(result.content);
-                if (data.recommendations && data.recommendations.length > 0) {
-                    const hydratedRecs = await bookService.hydrateBooksList(data.recommendations);
-                    await HistoryService.saveHistory('context', contextInput, hydratedRecs);
-                    navigation.navigate('RecResults', { recommendations: hydratedRecs });
-                } else {
-                    Alert.alert("No recommendations found.");
+            if (result.success && result.content) {
+                try {
+                    const data: PerplexityResponse = parseJson(result.content);
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        const hydratedRecs = await bookService.hydrateBooksList(data.recommendations);
+                        await HistoryService.saveHistory('context', contextInput, hydratedRecs);
+                        navigation.navigate('RecResults', { recommendations: hydratedRecs });
+                    } else {
+                        Alert.alert("No recommendations found.");
+                    }
+                } catch (e) {
+                    console.error("Parse error:", e);
+                    Alert.alert("Error", "Could not parse recommendations.");
                 }
-            } catch (e) {
-                Alert.alert("Error", "Could not parse recommendations.");
+            } else {
+                Alert.alert("Error", result.error || "Failed to fetch recommendations.");
             }
-        } else {
-            Alert.alert("Error", result.error || "Failed to fetch recommendations.");
+        } catch (error) {
+            console.error(error);
+            Alert.alert("Error", "An unexpected error occurred.");
+        } finally {
+            setLoading(false);
         }
     };
 

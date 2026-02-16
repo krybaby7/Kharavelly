@@ -1,24 +1,40 @@
-export type BookStatus = 'read' | 'reading' | 'tbr' | 'recommended';
-
-export interface RelationshipDynamics {
-    romantic?: string;
-    platonic?: string;
-    familial?: string;
-    rivalries?: string;
-    [key: string]: string | undefined;
+export interface NewsArticle {
+    title: string;
+    summary: string;
+    url?: string;
+    source: string;
+    date: string;
 }
 
+export interface FeedSection {
+    id: string;
+    title: string;
+    type: 'books' | 'news' | 'analytics' | 'history' | 'banner';
+    data: Book[] | NewsArticle[] | any;
+}
+
+export type BookStatus = 'tbr' | 'read' | 'dnf' | 'recommended';
+
+// RelationshipDynamics removed in favor of simpler tags
+
+
 export interface Book {
+    id?: string;
     title: string;
     author: string;
     tropes: string[];
     themes: string[];
-    microthemes: string[];
+    microthemes: string[]; // Keeping for backward compat, but effectively unused in new prompts
+    mood: string[]; // NEW: "Dark", "Whimsical", etc.
+    character_archetypes: string[]; // NEW: "Grumpy Sunshine", "Chosen One"
+    content_warnings: string[]; // NEW: "Violence", "Death"
+    perfect_for?: string; // NEW: "Fans of X"
+    quote?: string; // NEW: Memorable quote
     description?: string; // Official book description
-    relationship_dynamics: RelationshipDynamics;
+    relationship_dynamics?: any; // Deprecated but used in library service
     pacing?: string;
     reader_need?: string;
-    metadata?: Record<string, any>;
+    metadata?: Partial<import('./catalog').BookCatalogEntry>; // Updated: now strictly typed as partial catalog entry
     status: BookStatus;
     added_date?: string;
     coverImage?: string; // Additional field for UI
@@ -36,8 +52,8 @@ export interface PerplexityResponse {
         reader_profile?: string;
         common_tropes?: string[];
         common_themes?: string[];
-        common_microthemes?: string[];
-        common_relationship_patterns?: string[];
+        common_moods?: string[];
+        common_archetypes?: string[];
         common_pacing?: string;
     };
     recommendations: Book[];

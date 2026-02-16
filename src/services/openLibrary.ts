@@ -43,7 +43,7 @@ export const openLibraryService = {
                     author: doc.author_name ? doc.author_name[0] : 'Unknown Author',
                     coverImage: doc.cover_i
                         ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
-                        : null,
+                        : undefined as string | undefined,
                     description: '', // Open Library search doesn't return description usually, would need separate call. Keeping empty for now.
                     status: 'read', // Default
                     tropes: [],

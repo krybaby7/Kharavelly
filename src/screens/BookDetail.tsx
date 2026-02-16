@@ -7,6 +7,7 @@ import { Button } from '../components/common/Button';
 import { libraryService } from '../services/library';
 import { googleBooksService } from '../services/googleBooks';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 
 const { width } = Dimensions.get('window');
 
@@ -92,7 +93,19 @@ export const BookDetailScreen = ({ route, navigation }: any) => {
                         {rating > 0 && <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>}
                         {ratingsCount > 0 && <Text style={styles.ratingCount}>({ratingsCount})</Text>}
                         {ratingSource && <Text style={styles.sourceText}>via {ratingSource}</Text>}
-                    </View>                </View>
+                    </View>
+
+                    {/* Mood Chips in Header */}
+                    {book.mood && book.mood.length > 0 && (
+                        <View style={styles.moodContainer}>
+                            {book.mood.slice(0, 3).map((m, i) => (
+                                <View key={`m-${i}`} style={styles.moodChip}>
+                                    <Text style={styles.moodText}>{m}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </View>
             </View>
 
             <View style={styles.content}>
@@ -111,7 +124,7 @@ export const BookDetailScreen = ({ route, navigation }: any) => {
                                                 { text: "Cancel", style: "cancel" },
                                                 {
                                                     text: "Save",
-                                                    onPress: (val) => {
+                                                    onPress: (val?: string) => {
                                                         const page = parseInt(val || '0');
                                                         if (!isNaN(page)) {
                                                             libraryService.updateProgress(book.title, book.author, page);
@@ -175,6 +188,22 @@ export const BookDetailScreen = ({ route, navigation }: any) => {
                     </View>
                 )}
 
+                {book.quote && (
+                    <View style={styles.quoteContainer}>
+                        <Text style={styles.quoteText}>"{book.quote}"</Text>
+                    </View>
+                )}
+
+                {book.perfect_for && (
+                    <View style={styles.perfectForContainer}>
+                        <Ionicons name="people" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.perfectForLabel}>PERFECT FOR</Text>
+                            <Text style={styles.perfectForText}>{book.perfect_for}</Text>
+                        </View>
+                    </View>
+                )}
+
                 {description && (
                     <View style={styles.section}>
                         <Text style={styles.sectionLabel}>SYNOPSIS</Text>
@@ -185,13 +214,29 @@ export const BookDetailScreen = ({ route, navigation }: any) => {
                 <View style={styles.section}>
                     <Text style={styles.sectionLabel}>DETAILS</Text>
                     <View style={styles.tagsRow}>
-                        {book.tropes.map((t, i) => (
+                        {book.tropes && book.tropes.length > 0 && book.tropes.map((t, i) => (
                             <View key={`t-${i}`} style={styles.tag}><Text style={styles.tagText}>{t}</Text></View>
+                        ))}
+                        {book.character_archetypes && book.character_archetypes.map((a, i) => (
+                            <View key={`a-${i}`} style={[styles.tag, { borderColor: colors.primary }]}><Text style={[styles.tagText, { color: colors.primary }]}>{a}</Text></View>
                         ))}
                     </View>
 
                     {book.pacing && <Text style={styles.metaText}>Pacing: <Text style={styles.metaValue}>{book.pacing}</Text></Text>}
                     {book.reader_need && <Text style={styles.metaText}>Need: <Text style={styles.metaValue}>{book.reader_need}</Text></Text>}
+
+                    <View style={styles.copyContainer}>
+                        <TouchableOpacity
+                            style={styles.copyButton}
+                            onPress={async () => {
+                                await Clipboard.setStringAsync(`${book.title} by ${book.author}`);
+                                Alert.alert("Copied", "Book title copied to clipboard!");
+                            }}
+                        >
+                            <Ionicons name="copy-outline" size={16} color={colors.error || '#FF6B6B'} />
+                            <Text style={styles.copyText}>COPY BOOK NAME</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <View style={{ height: 100 }} />
@@ -285,6 +330,28 @@ const createStyles = (colors: any) => StyleSheet.create({
         textShadowOffset: { width: -1, height: 1 },
         textShadowRadius: 10
     },
+    moodContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 12,
+    },
+    moodChip: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
+    moodText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 'bold',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10
+    },
     content: {
         padding: SPACING.l,
         marginTop: -20, // Overlap slightly if rounded?
@@ -368,6 +435,61 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: colors.text,
         lineHeight: 26,
         fontFamily: FONTS.regular,
+    },
+    quoteContainer: {
+        marginVertical: SPACING.l,
+        paddingHorizontal: SPACING.m,
+        borderLeftWidth: 2,
+        borderLeftColor: colors.primary,
+        opacity: 0.9,
+    },
+    quoteText: {
+        fontSize: 18,
+        fontStyle: 'italic',
+        color: colors.text,
+        fontFamily: FONTS.regular,
+        lineHeight: 28,
+    },
+    perfectForContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        padding: SPACING.m,
+        borderRadius: 12,
+        marginBottom: SPACING.xl,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    perfectForLabel: {
+        fontSize: 10,
+        color: colors.primary,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+        marginBottom: 2,
+    },
+    perfectForText: {
+        fontSize: 14,
+        color: colors.text,
+        lineHeight: 20,
+    },
+    copyContainer: {
+        marginTop: SPACING.l,
+        paddingTop: SPACING.m,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        alignItems: 'center',
+    },
+    copyButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 8,
+    },
+    copyText: {
+        fontSize: 12,
+        color: colors.error || '#FF6B6B',
+        fontWeight: 'bold',
+        letterSpacing: 1,
+        marginLeft: 8,
     },
     tagsRow: {
         flexDirection: 'row',

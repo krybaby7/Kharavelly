@@ -1,3 +1,13 @@
+// ============================================================
+// Library Service — Updated with Catalog Integration
+// ============================================================
+// When a user adds a book to their library, we:
+//   1. Save it to the user's personal `books` table (as before)
+//   2. Ensure it exists in the shared `book_catalog`
+//   3. Increment the "times_saved" counter in the catalog
+//   4. Queue it for background enrichment if needed
+// ============================================================
+
 import { Book, BookStatus } from '../types';
 import { supabase } from './supabase';
 import { catalogService } from './catalog';
@@ -21,7 +31,7 @@ export class LibraryService {
             const key = `${book.title.toLowerCase()}|${book.author.toLowerCase()}`;
             library[key] = {
                 ...book,
-                // Ensure helper types match
+                coverImage: book.cover_image || book.coverImage,
                 relationship_dynamics: book.relationship_dynamics || {},
                 tropes: book.tropes || [],
                 themes: book.themes || [],
@@ -34,6 +44,7 @@ export class LibraryService {
     }
 
     async addBook(book: Book): Promise<void> {
+        // 1. Save to user's personal library (as before)
         const { error } = await supabase
             .from('books')
             .upsert({
@@ -48,14 +59,13 @@ export class LibraryService {
                 relationship_dynamics: book.relationship_dynamics,
                 progress: book.progress,
                 total_pages: book.total_pages
-                // Let Supabase handle user_id via default auth.uid()
             }, {
                 onConflict: 'user_id, title, author'
             });
 
         if (error) {
             console.error("Failed to add book", error);
-            return; // Don't proceed to catalog if save failed
+            return;
         }
 
         // 2. Ensure it's in the catalog (non-blocking)
@@ -122,11 +132,6 @@ export class LibraryService {
         }
         return true;
     }
-
-    // Helper to get local snapshot if needed, but better to query DB or use state management
-    // For now, simple direct query for these getters might be slow. 
-    // Optimization: Cache results or use a reactive store (Context/Redux).
-    // Keeping simple for migration.
 }
 
 export const libraryService = new LibraryService();

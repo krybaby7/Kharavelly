@@ -45,7 +45,15 @@ export async function callPerplexity(
         return { success: true, content, usage };
 
     } catch (error: any) {
-        console.error("Perplexity API Error:", error.response?.data || error.message);
+        console.error("Perplexity API Error:", error.response?.status, error.response?.data || error.message);
+
+        if (error.response?.status === 401) {
+            return { success: false, error: "Invalid API Key. Please check your Perplexity API Key in .env and ensure you have credits." };
+        }
+        if (error.response?.status === 429) {
+            return { success: false, error: "Rate limit exceeded. Please try again later." };
+        }
+
         return { success: false, error: error.response?.data?.error?.message || error.message };
     }
 }

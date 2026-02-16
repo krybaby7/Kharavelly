@@ -1,18 +1,28 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Dimensions } from 'react-native';
+import React, { useMemo, useState, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Dimensions, Animated, Switch } from 'react-native';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SPACING, FONTS } from '../../theme';
 import { useTheme } from '../../theme/ThemeContext';
 import { Book } from '../../types';
 import { Ionicons } from '@expo/vector-icons';
+import { libraryService } from '../../services/library';
 
 const { width } = Dimensions.get('window');
-const COLUMN_COUNT = 2;
-const GAP = SPACING.m;
-const ITEM_WIDTH = (width - (SPACING.l * 2) - GAP) / 2;
 
-const RecResultItem = ({ item, onPress }: { item: Book; onPress: (book: Book) => void }) => {
+const RecResultItem = ({
+    item,
+    onPress,
+    onSwipeLeft,
+    onSwipeRight
+}: {
+    item: Book;
+    onPress: (book: Book) => void;
+    onSwipeLeft: (book: Book) => void; // Swipe Left -> Read
+    onSwipeRight: (book: Book) => void; // Swipe Right -> TBR
+}) => {
     const { colors } = useTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
+    const swipeableRef = useRef<Swipeable>(null);
 
     const renderStars = (rating: number) => {
         const stars = [];
@@ -32,76 +42,186 @@ const RecResultItem = ({ item, onPress }: { item: Book; onPress: (book: Book) =>
         return stars;
     };
 
+    // Render Left Actions (Revealed when swiping Right -> TBR)
+    const renderLeftActions = (progress: any, dragX: any) => {
+        const trans = dragX.interpolate({
+            inputRange: [0, 50, 100, 101],
+            outputRange: [-20, 0, 0, 1],
+        });
+        return (
+            <View style={[styles.leftAction, { backgroundColor: '#2E8B57' }]}>
+                <Animated.Text
+                    style={[
+                        styles.actionText,
+                        {
+                            transform: [{ translateX: trans }],
+                        },
+                    ]}>
+                    TBR
+                </Animated.Text>
+                <Ionicons name="bookmark" size={24} color="#fff" style={{ marginLeft: 10 }} />
+            </View>
+        );
+    };
+
+    // Render Right Actions (Revealed when swiping Left -> Read)
+    const renderRightActions = (progress: any, dragX: any) => {
+        const trans = dragX.interpolate({
+            inputRange: [-101, -100, -50, 0],
+            outputRange: [-1, 0, 0, 20],
+        });
+        return (
+            <View style={[styles.rightAction, { backgroundColor: '#4A90E2' }]}>
+                <Ionicons name="checkmark-done" size={24} color="#fff" style={{ marginRight: 10 }} />
+                <Animated.Text
+                    style={[
+                        styles.actionText,
+                        {
+                            transform: [{ translateX: trans }],
+                        },
+                    ]}>
+                    Read
+                </Animated.Text>
+            </View>
+        );
+    };
+
     return (
-        <TouchableOpacity
-            style={styles.listItem}
-            onPress={() => onPress(item)}
-            activeOpacity={0.7}
+        <Swipeable
+            ref={swipeableRef}
+            renderLeftActions={renderLeftActions}
+            renderRightActions={renderRightActions}
+            onSwipeableLeftOpen={() => {
+                swipeableRef.current?.close();
+                onSwipeRight(item); // Swiped Right (reveals Left) -> TBR
+            }}
+            onSwipeableRightOpen={() => {
+                swipeableRef.current?.close();
+                onSwipeLeft(item); // Swiped Left (reveals Right) -> Read
+            }}
         >
-            <View style={styles.coverContainer}>
-                <Image
-                    source={{ uri: item.coverImage || 'https://via.placeholder.com/200x300' }}
-                    style={styles.coverImage}
-                    resizeMode="cover"
-                />
-            </View>
-
-            <View style={styles.infoContainer}>
-                <Text style={styles.bookTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.bookAuthor} numberOfLines={1}>by {item.author}</Text>
-
-                <View style={styles.ratingRow}>
-                    <View style={styles.starsContainer}>
-                        {renderStars(item.rating || 0)}
-                    </View>
-                    <Text style={styles.ratingValue}>{item.rating ? item.rating.toFixed(2) : '0.00'}</Text>
+            <TouchableOpacity
+                style={styles.listItem}
+                onPress={() => onPress(item)}
+                activeOpacity={0.7}
+            >
+                <View style={styles.coverContainer}>
+                    <Image
+                        source={{ uri: item.coverImage || 'https://via.placeholder.com/200x300' }}
+                        style={styles.coverImage}
+                        resizeMode="cover"
+                    />
                 </View>
 
-                <Text style={styles.ratingCount}>
-                    {item.ratings_count ? item.ratings_count.toLocaleString() : '0'} ratings
-                </Text>
+                <View style={styles.infoContainer}>
+                    <Text style={styles.bookTitle} numberOfLines={2}>{item.title}</Text>
+                    <Text style={styles.bookAuthor} numberOfLines={1}>by {item.author}</Text>
 
-                {item.match_reasoning && (
-                    <View style={styles.reasoningContainer}>
-                        <Text style={styles.reasoningLabel}>WHY THIS MATCHES:</Text>
-                        <Text style={styles.reasoningText} numberOfLines={3}>{item.match_reasoning}</Text>
-                    </View>
-                )}
-
-                <View style={styles.tagsContainer}>
-                    {item.tropes && item.tropes.slice(0, 2).map((trope, index) => (
-                        <View key={`trope-${index}`} style={styles.tagChip}>
-                            <Text style={styles.tagText}>{trope}</Text>
+                    <View style={styles.ratingRow}>
+                        <View style={styles.starsContainer}>
+                            {renderStars(item.rating || 0)}
                         </View>
-                    ))}
-                    {item.themes && item.themes.slice(0, 1).map((theme, index) => (
-                        <View key={`theme-${index}`} style={styles.tagChip}>
-                            <Text style={styles.tagText}>{theme}</Text>
-                        </View>
-                    ))}
-                </View>
+                        <Text style={styles.ratingValue}>{item.rating ? item.rating.toFixed(2) : '0.00'}</Text>
+                    </View>
 
-                <View style={styles.wantToReadBtn}>
-                    <Text style={styles.wantToReadText}>Want to Read</Text>
-                    <Ionicons name="chevron-down" size={16} color="#fff" />
+                    <Text style={styles.ratingCount}>
+                        {item.ratings_count ? item.ratings_count.toLocaleString() : '0'} ratings
+                    </Text>
+
+                    {item.match_reasoning && (
+                        <View style={styles.reasoningContainer}>
+                            <Text style={styles.reasoningLabel}>WHY THIS MATCHES:</Text>
+                            <Text style={styles.reasoningText} numberOfLines={3}>{item.match_reasoning}</Text>
+                        </View>
+                    )}
+
+                    <View style={styles.tagsContainer}>
+                        {item.tropes && item.tropes.slice(0, 2).map((trope, index) => (
+                            <View key={`trope-${index}`} style={styles.tagChip}>
+                                <Text style={styles.tagText}>{trope}</Text>
+                            </View>
+                        ))}
+                        {item.themes && item.themes.slice(0, 1).map((theme, index) => (
+                            <View key={`theme-${index}`} style={styles.tagChip}>
+                                <Text style={styles.tagText}>{theme}</Text>
+                            </View>
+                        ))}
+                    </View>
                 </View>
-            </View>
-        </TouchableOpacity>
+            </TouchableOpacity>
+        </Swipeable>
     );
 };
 
 export const RecResultsScreen = ({ navigation, route }: any) => {
     const { colors } = useTheme();
     const styles = useMemo(() => createStyles(colors), [colors]);
-    const { recommendations, introText, totalCost } = route.params || {};
+    const { recommendations: initialRecommendations, introText, totalCost } = route.params || {};
+
+    const [swipedBookIds, setSwipedBookIds] = useState<Set<string>>(new Set());
+    const [showSwiped, setShowSwiped] = useState(false);
+
+    // Filter logic
+    const visibleRecommendations = useMemo(() => {
+        if (!initialRecommendations) return [];
+        if (showSwiped) return initialRecommendations;
+        return initialRecommendations.filter((book: Book) => {
+            const key = `${book.title}-${book.author}`; // Simple key
+            return !swipedBookIds.has(key);
+        });
+    }, [initialRecommendations, swipedBookIds, showSwiped]);
 
     const handleBookPress = (book: Book) => {
         navigation.navigate('BookDetail', { book });
     };
 
+    const handleSwipeRight = async (book: Book) => {
+        // Swipe Right -> TBR
+        try {
+            await libraryService.addBook({ ...book, status: 'tbr' });
+        } catch (e) {
+            console.error("Failed to add to TBR from Curator", e);
+            // Optionally show an alert to the user
+        }
+
+        setSwipedBookIds(prev => {
+            const newSet = new Set(prev);
+            newSet.add(`${book.title}-${book.author}`);
+            return newSet;
+        });
+    };
+
+    const handleSwipeLeft = async (book: Book) => {
+        // Swipe Left -> Read
+        try {
+            await libraryService.addBook({ ...book, status: 'read' });
+        } catch (e) {
+            console.error("Failed to add to Read from Curator", e);
+        }
+
+        setSwipedBookIds(prev => {
+            const newSet = new Set(prev);
+            newSet.add(`${book.title}-${book.author}`);
+            return newSet;
+        });
+    };
+
+    const toggleShowSwiped = () => setShowSwiped(!showSwiped);
+
     const renderHeader = () => (
         <View style={styles.header}>
-            <Text style={styles.headerTitle}>Your Matches</Text>
+            <View style={styles.headerTopRow}>
+                <Text style={styles.headerTitle}>Your Matches</Text>
+                <View style={styles.toggleContainer}>
+                    <Text style={styles.toggleLabel}>Show Swiped</Text>
+                    <Switch
+                        value={showSwiped}
+                        onValueChange={toggleShowSwiped}
+                        trackColor={{ false: '#767577', true: colors.primary }}
+                        thumbColor={showSwiped ? '#fff' : '#f4f3f4'}
+                    />
+                </View>
+            </View>
 
             {introText && (
                 <View style={styles.analysisContainer}>
@@ -115,7 +235,7 @@ export const RecResultsScreen = ({ navigation, route }: any) => {
         </View>
     );
 
-    if (!recommendations || recommendations.length === 0) {
+    if (!initialRecommendations || initialRecommendations.length === 0) {
         return (
             <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No recommendations found.</Text>
@@ -124,16 +244,24 @@ export const RecResultsScreen = ({ navigation, route }: any) => {
     }
 
     return (
-        <View style={styles.container}>
+        <GestureHandlerRootView style={styles.container}>
             <FlatList
-                data={recommendations}
-                renderItem={({ item }) => <RecResultItem item={item} onPress={handleBookPress} />}
+                data={visibleRecommendations}
+                renderItem={({ item }) => (
+                    <RecResultItem
+                        item={item}
+                        onPress={handleBookPress}
+                        onSwipeLeft={handleSwipeLeft}
+                        onSwipeRight={handleSwipeRight}
+                    />
+                )}
                 keyExtractor={(item, index) => `${item.title}-${index}`}
                 contentContainerStyle={styles.listContent}
                 ListHeaderComponent={renderHeader}
                 showsVerticalScrollIndicator={false}
+                extraData={swipedBookIds} // Rerender when swiped IDs change
             />
-        </View>
+        </GestureHandlerRootView>
     );
 };
 
@@ -144,17 +272,31 @@ const createStyles = (colors: any) => StyleSheet.create({
     },
     listContent: {
         paddingBottom: 40,
-        paddingHorizontal: SPACING.l,
     },
     header: {
         paddingTop: SPACING.xl,
         marginBottom: SPACING.m,
+        paddingHorizontal: SPACING.l,
+    },
+    headerTopRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.l,
     },
     headerTitle: {
         fontSize: 32,
         fontFamily: FONTS.bold,
         color: colors.text,
-        marginBottom: SPACING.l,
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    toggleLabel: {
+        color: colors.textLight,
+        marginRight: 8,
+        fontSize: 12,
     },
     analysisContainer: {
         marginBottom: SPACING.l,
@@ -182,10 +324,11 @@ const createStyles = (colors: any) => StyleSheet.create({
     // List Item Styles
     listItem: {
         flexDirection: 'row',
-        marginBottom: SPACING.l,
+        backgroundColor: colors.background, // Ensure background covers swipe actions
+        paddingVertical: SPACING.m,
+        paddingHorizontal: SPACING.l,
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(255,255,255,0.1)',
-        paddingBottom: SPACING.m,
     },
     coverContainer: {
         width: 70,
@@ -235,22 +378,6 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: '#808080',
         fontSize: 13,
         marginBottom: 12,
-    },
-    wantToReadBtn: {
-        backgroundColor: '#2E8B57', // Green color
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 4,
-        alignSelf: 'flex-start',
-        minWidth: 140,
-    },
-    wantToReadText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
     },
     reasoningContainer: {
         marginTop: 8,
@@ -307,4 +434,29 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: colors.textLight,
         fontSize: 16,
     },
+    // Swipe Actions
+    leftAction: {
+        flex: 1,
+        backgroundColor: '#2E8B57', // Green
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        paddingLeft: 20,
+        flexDirection: 'row',
+
+    },
+    rightAction: {
+        flex: 1,
+        backgroundColor: '#4A90E2', // Blue? Or Red? Used blue for Read to differentiation
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        paddingRight: 20,
+        flexDirection: 'row-reverse',
+
+    },
+    actionText: {
+        color: 'white',
+        fontWeight: '600',
+        paddingHorizontal: 10,
+    },
 });
+

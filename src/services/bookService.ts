@@ -78,27 +78,35 @@ export const bookService = {
         // 1. Try Open Library
         let book = await openLibraryService.searchBook(title);
 
-        // 2. Logic: If no book found OR book found but missing cover (quality check) -> Fallback
-        if (!book || !book.coverImage) {
-            console.log(`[BookService] OpenLibrary failed or poor quality for "${title}". Falling back to Google.`);
+        // 2. Logic: If no book found OR book found but missing cover/rating (quality check) -> Fallback
+        if (!book || !book.coverImage || !book.rating || book.rating === 0) {
+            console.log(`[BookService] OpenLibrary failed or poor quality (missing cover/rating) for "${title}". Falling back to Google.`);
             const googleBook = await googleBooksService.searchBook(title, '');
 
             if (googleBook) {
-                // If we had a partial OL match (e.g. title but no cover), and Google failed, we stick with OL.
-                // But if Google returns checks out, we use Google.
-
-                // Helper to merge? For now, if Google returns valid, prefer Google full details 
-                // as it usually has description + cover.
-                book = {
-                    ...googleBook,
-                    // defaults if not in googleBook
-                    status: book?.status || 'read',
-                    tropes: book?.tropes || [],
-                    // Do not overwrite rating if it exists
-                    rating: googleBook.rating || 0,
-                    ratings_count: googleBook.ratings_count || 0,
-                    rating_source: googleBook.rating_source,
-                } as Book;
+                // If we have a partial book (from OL), merge Google data in
+                if (book) {
+                    book = {
+                        ...book,
+                        // Prefer Google's cover/rating if we were missing them
+                        coverImage: book.coverImage || googleBook.coverImage,
+                        rating: (book.rating && book.rating > 0) ? book.rating : googleBook.rating,
+                        ratings_count: (book.ratings_count && book.ratings_count > 0) ? book.ratings_count : googleBook.ratings_count,
+                        rating_source: (book.rating_source) ? book.rating_source : googleBook.rating_source,
+                        // Fill in other gaps
+                        description: (book.description && book.description.length > 50) ? book.description : googleBook.description,
+                        total_pages: book.total_pages || googleBook.total_pages,
+                        tropes: book.tropes?.length ? book.tropes : googleBook.tropes,
+                        themes: book.themes?.length ? book.themes : googleBook.themes,
+                    };
+                } else {
+                    // No OL book at all, use Google book entirely
+                    book = {
+                        ...googleBook,
+                        status: 'read',
+                        tropes: googleBook.tropes || [],
+                    } as Book;
+                }
             }
         }
 
@@ -197,21 +205,26 @@ export const bookService = {
 
                     // Fetch external data (cover, rating)
                     let coverImage = book.coverImage || catalogEntry?.cover_image || null;
-                    let rating = book.rating || 0;
-                    let ratingsCount = book.ratings_count || 0;
-                    let ratingSource = book.rating_source;
-                    let totalPages = book.total_pages;
+                    let rating = book.rating || catalogEntry?.rating as number || 0;
+                    let ratingsCount = book.ratings_count || catalogEntry?.ratings_count || 0;
+                    let ratingSource = book.rating_source || catalogEntry?.rating_source;
+                    let totalPages = book.total_pages || catalogEntry?.page_count;
 
-                    // Only call Google Books if we're missing cover
-                    if (!coverImage) {
+                    // Call Google Books if we're missing cover OR rating data
+                    const needsCover = !coverImage;
+                    const needsRating = !rating || rating === 0;
+
+                    if (needsCover || needsRating) {
                         const googleData = await googleBooksService.searchBook(
                             book.title, book.author || ''
                         );
                         if (googleData) {
-                            coverImage = googleData.coverImage;
-                            rating = googleData.rating || rating;
-                            ratingsCount = googleData.ratings_count || ratingsCount;
-                            ratingSource = googleData.rating_source || ratingSource;
+                            if (needsCover) coverImage = googleData.coverImage || coverImage;
+                            if (needsRating) {
+                                rating = googleData.rating || rating;
+                                ratingsCount = googleData.ratings_count || ratingsCount;
+                                ratingSource = googleData.rating_source || ratingSource;
+                            }
                             totalPages = googleData.total_pages || totalPages;
                         }
                     }

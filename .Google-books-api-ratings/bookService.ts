@@ -3,8 +3,6 @@ import { openLibraryService } from './openLibrary';
 import { catalogService } from './catalog';
 import { Book } from '../types';
 import { BookCatalogEntry, makeCatalogKey } from '../types/catalog';
-import { fetchBatchRatings } from './perplexity';
-import { CONFIG } from '../config';
 
 // Simple in-memory cache to prevent re-fetching same queries in session
 const MEMORY_CACHE: Record<string, Book> = {};
@@ -16,14 +14,14 @@ function mergeWithCatalog(book: Partial<Book>, catalog: BookCatalogEntry): Book 
     return {
         title: book.title || catalog.title,
         author: book.author || catalog.author,
-        description: catalog.description || book.description || '',
+        description: book.description || catalog.description || '',
         coverImage: book.coverImage || catalog.cover_image || undefined,
         status: book.status || 'recommended',
-        tropes: catalog.tropes && catalog.tropes.length > 0 ? catalog.tropes : (book.tropes || []),
-        themes: catalog.themes && catalog.themes.length > 0 ? catalog.themes : (book.themes || []),
+        tropes: catalog.tropes || book.tropes || [],
+        themes: catalog.themes || book.themes || [],
         microthemes: book.microthemes || [],
-        mood: catalog.mood_emotions && catalog.mood_emotions.length > 0 ? catalog.mood_emotions : (book.mood || []),
-        character_archetypes: catalog.character_archetypes && catalog.character_archetypes.length > 0 ? catalog.character_archetypes : (book.character_archetypes || []),
+        mood: catalog.mood_emotions || book.mood || [],
+        character_archetypes: catalog.character_archetypes || book.character_archetypes || [],
         content_warnings: catalog.content_warnings ? catalog.content_warnings.map(w => w.category) : (book.content_warnings || []),
         perfect_for: catalog.perfect_for || book.perfect_for,
         quote: catalog.memorable_quote || book.quote,
@@ -105,14 +103,14 @@ export const bookService = {
                     // Merge: prefer whichever source has the data
                     book = {
                         ...book,
-                        coverImage: book.coverImage || googleBook.coverImage || undefined,
+                        coverImage: book.coverImage || googleBook.coverImage,
                         rating: (book.rating && book.rating > 0) ? book.rating : googleBook.rating,
                         ratings_count: (book.ratings_count && book.ratings_count > 0) ? book.ratings_count : googleBook.ratings_count,
-                        rating_source: book.rating_source || googleBook.rating_source || undefined,
+                        rating_source: book.rating_source || googleBook.rating_source,
                         description: (book.description && book.description.length > 50) ? book.description : googleBook.description,
                         total_pages: book.total_pages || googleBook.total_pages,
-                        tropes: book.tropes?.length ? book.tropes : (googleBook.tropes || []),
-                        themes: (book as any).themes?.length ? (book as any).themes : ((googleBook as any).themes || []),
+                        tropes: book.tropes?.length ? book.tropes : googleBook.tropes,
+                        themes: book.themes?.length ? book.themes : googleBook.themes,
                     };
                 } else {
                     book = {
@@ -194,19 +192,9 @@ export const bookService = {
         // Step 1: Batch extract catalog metadata
         if (onProgress) onProgress(`Analyzing ${books.length} books...`);
 
-        const catalogEntries: BookCatalogEntry[] = [];
-        const CATALOG_BATCH_SIZE = 2;
-        for (let i = 0; i < books.length; i += CATALOG_BATCH_SIZE) {
-            const chunk = books.slice(i, i + CATALOG_BATCH_SIZE);
-            const chunkEntries = await catalogService.batchExtractAndStore(
-                chunk.map(b => ({ title: b.title, author: b.author || 'Unknown' }))
-            );
-            catalogEntries.push(...chunkEntries);
-            if (i + CATALOG_BATCH_SIZE < books.length) {
-                // Short wait to avoid Perplexity rate limits
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-        }
+        const catalogEntries = await catalogService.batchExtractAndStore(
+            books.map(b => ({ title: b.title, author: b.author || 'Unknown' }))
+        );
 
         const catalogMap: Record<string, BookCatalogEntry> = {};
         for (const entry of catalogEntries) {
@@ -331,45 +319,6 @@ export const bookService = {
             // Increased delay between batches (300ms vs 100ms)
             if (i + BATCH_SIZE < books.length) {
                 await new Promise(resolve => setTimeout(resolve, 300));
-            }
-        }
-
-        // Step 3: Targeted Perplexity fallback for remaining 0-rating books
-        const missingRatings = hydratedBooks.filter(b => !b.rating || b.rating === 0);
-        if (missingRatings.length > 0) {
-            console.log(`[BookService] ${missingRatings.length} books still missing ratings. Asking Perplexity...`);
-            if (onProgress) onProgress(`Finding rare book ratings...`);
-
-            const batchRatings = await fetchBatchRatings(
-                missingRatings.map(b => ({ title: b.title, author: b.author })),
-                CONFIG.PERPLEXITY_MODEL,
-                CONFIG.PERPLEXITY_API_KEY
-            );
-
-            // Apply newly found ratings and update catalog
-            for (let i = 0; i < hydratedBooks.length; i++) {
-                const book = hydratedBooks[i];
-                if (!book.rating || book.rating === 0) {
-                    const searchKey = book.title.toLowerCase().trim();
-                    const grRating = batchRatings[searchKey];
-                    if (grRating && grRating.rating > 0) {
-                        hydratedBooks[i].rating = grRating.rating;
-                        hydratedBooks[i].ratings_count = grRating.ratings_count;
-                        hydratedBooks[i].rating_source = 'Goodreads';
-                        console.log(`[BookService] Deep fetch found Goodreads rating for "${book.title}": ${grRating.rating}`);
-
-                        // Sync to catalog
-                        const key = makeCatalogKey(book.title, book.author || 'Unknown');
-                        const catalogEntry = catalogMap[key];
-                        if (catalogEntry) {
-                            await catalogService.mergeCatalogData(catalogEntry, {
-                                rating: grRating.rating as any,
-                                ratings_count: grRating.ratings_count,
-                                rating_source: 'Goodreads',
-                            });
-                        }
-                    }
-                }
             }
         }
 

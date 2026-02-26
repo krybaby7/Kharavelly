@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: COLORS.secondary,
+        backgroundColor: COLORS.border,
     },
     placeholderText: {
         fontSize: 10,

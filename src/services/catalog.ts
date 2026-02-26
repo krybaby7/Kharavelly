@@ -59,40 +59,43 @@ export const catalogService = {
 
         // 1. Check session cache
         if (SESSION_CACHE[key]) {
-            return SESSION_CACHE[key];
+            // Only return early if fully enriched (or if enrichment is skipped)
+            if (SESSION_CACHE[key].enrichment_tier >= 2 || skipEnrichment) {
+                return SESSION_CACHE[key];
+            }
         }
 
         // 2. Check Supabase
-        const existing = await this.getFromCatalog(key);
+        let existing = await this.getFromCatalog(key);
         if (existing) {
             // Merge any new partial data (e.g., updated cover from Google Books)
             if (partialData) {
-                const merged = await this.mergeCatalogData(existing, partialData);
-                SESSION_CACHE[key] = merged;
-                return merged;
+                existing = await this.mergeCatalogData(existing, partialData);
             }
             SESSION_CACHE[key] = existing;
 
-            // Queue for background enrichment if still Tier 1
-            if (existing.enrichment_tier < 2) {
-                ENRICHMENT_QUEUE.add(key);
+            // Only return early if fully enriched (Tier 2+)
+            if (existing.enrichment_tier >= 2 || skipEnrichment) {
+                // Queue for background enrichment if Tier 2 (Tier 3 is future)
+                if (existing.enrichment_tier === 2) {
+                    ENRICHMENT_QUEUE.add(key);
+                }
+                return existing;
             }
-
-            return existing;
         }
 
-        // 3. Not in catalog — create entry
+        // 3. Extract Tier 1+2 metadata via Perplexity
         let entry: BookCatalogEntry;
 
         if (!skipEnrichment) {
-            // Extract Tier 1+2 metadata via Perplexity
-            entry = await this.extractAndStore(title, author, partialData);
+            // Pass any existing Tier 1 data into the extraction so it doesn't get lost
+            entry = await this.extractAndStore(title, author, existing || partialData);
         } else {
             // Store what we have without enrichment
             entry = createMinimalCatalogEntry({
                 title,
                 author,
-                ...partialData,
+                ...(existing || partialData),
                 extraction_source: 'hydration-only',
                 enrichment_tier: 1,
             });
@@ -192,7 +195,9 @@ export const catalogService = {
         for (const book of books) {
             const key = makeCatalogKey(book.title, book.author);
             const cached = SESSION_CACHE[key] || await this.getFromCatalog(key);
-            if (cached) {
+
+            // Only skip extraction if it's already Tier 2+
+            if (cached && cached.enrichment_tier >= 2) {
                 existing.push(cached);
                 SESSION_CACHE[key] = cached;
             } else {
@@ -201,7 +206,7 @@ export const catalogService = {
         }
 
         if (toProcess.length === 0) {
-            console.log('[Catalog] All books already in catalog');
+            console.log('[Catalog] All books already fully enriched in catalog (Tier 2+)');
             return existing;
         }
 
@@ -223,16 +228,26 @@ export const catalogService = {
                 const parsed = parseJson(result.content);
                 const extractedBooks = parsed.books || parsed;
 
-                if (Array.isArray(extractedBooks)) {
-                    for (let i = 0; i < extractedBooks.length; i++) {
-                        const extracted = extractedBooks[i];
-                        // Match back to original book data for covers/ratings
-                        const original = toProcess[i] || {};
+                const extractedArray = Array.isArray(extractedBooks) ? extractedBooks : [];
 
+                for (let i = 0; i < toProcess.length; i++) {
+                    const original = toProcess[i];
+
+                    // Match back to extracted book data (try by title, fallback to index)
+                    let extracted = extractedArray.find(
+                        (b: any) => b.title && b.title.toLowerCase().includes(original.title.toLowerCase()) ||
+                            original.title.toLowerCase().includes(b.title?.toLowerCase() || '')
+                    );
+                    if (!extracted && extractedArray[i]) {
+                        extracted = extractedArray[i];
+                    }
+
+                    if (extracted) {
                         const entry = createMinimalCatalogEntry({
                             ...extracted,
-                            title: extracted.title || original.title,
-                            author: extracted.author || original.author,
+                            // CRITICAL: Always use original title/author so catalog keys match expected lookups!
+                            title: original.title,
+                            author: original.author,
                             cover_image: original.coverImage || original.cover_image || null,
                             enrichment_tier: 2 as const,
                             extraction_source: 'perplexity-batch',
@@ -244,6 +259,21 @@ export const catalogService = {
                         await this.saveToCatalog(entry);
                         SESSION_CACHE[entry.catalog_key] = entry;
                         newEntries.push(entry);
+                    } else {
+                        // Perplexity completely skipped this book in its JSON output!
+                        console.warn(`[Catalog] Perplexity dropped book "${original.title}". Creating fallback entry.`);
+                        const fallback = createMinimalCatalogEntry({
+                            title: original.title,
+                            author: original.author,
+                            cover_image: original.coverImage || null,
+                            extraction_source: 'batch-extraction-dropped',
+                            enrichment_tier: 1 as const,
+                            confidence_score: 0.3,
+                            needs_review: true,
+                        });
+                        await this.saveToCatalog(fallback);
+                        SESSION_CACHE[fallback.catalog_key] = fallback;
+                        newEntries.push(fallback);
                     }
                 }
 

@@ -53,8 +53,9 @@ REQUIRED OUTPUT (JSON only, no other text):
 }
 
 RULES:
-- Use your knowledge and search results together. Do NOT refuse if search is incomplete.
-- For content_warnings, only include warnings that are genuinely relevant (violence, sexual content, substance abuse, self-harm, death of child, etc.). Omit the array if none apply.
+- You MUST creatively fill in ALL fields for every book, even if the book is obscure or unreleased.
+- Do NOT leave arrays empty or strings blank.
+- For content_warnings, guess broadly if unknown.
 - confidence: 0.9+ if you know the book well, 0.7-0.9 if partially certain, below 0.7 if guessing.
 - Output ONLY valid JSON. No markdown, no text before or after.`;
 
@@ -89,7 +90,10 @@ Extract these ADDITIONAL fields (do not repeat what's already known):
   "confidence": 0.8
 }
 
-Output ONLY valid JSON. No markdown, no text before or after.`;
+RULES:
+- You MUST creatively fill in ALL fields for every book, even if the book is obscure or unreleased.
+- Do NOT leave arrays empty or strings blank.
+- Output ONLY valid JSON. No markdown, no text before or after.`;
 
 
 /**
@@ -136,4 +140,7 @@ OUTPUT FORMAT — Return a JSON array:
   ]
 }
 
-Output ONLY valid JSON. No markdown, no text before or after.`;
+RULES:
+- You MUST creatively fill in ALL fields for every book, even if the book is obscure or unreleased.
+- Do NOT leave arrays empty or strings blank.
+- Output ONLY valid JSON. No markdown, no text before or after.`;

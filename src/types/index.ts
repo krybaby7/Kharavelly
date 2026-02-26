@@ -13,7 +13,7 @@ export interface FeedSection {
     data: Book[] | NewsArticle[] | any;
 }
 
-export type BookStatus = 'tbr' | 'read' | 'dnf' | 'recommended';
+export type BookStatus = 'tbr' | 'read' | 'dnf' | 'recommended' | 'reading';
 
 // RelationshipDynamics removed in favor of simpler tags
 

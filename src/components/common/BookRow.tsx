@@ -115,8 +115,11 @@ export const BookRow: React.FC<BookRowProps> = ({ item, onPress, onSwipeLeft, on
                         <View style={styles.starsContainer}>
                             {renderStars(item.rating || 0)}
                         </View>
-                        <Text style={styles.ratingValue}>{item.rating ? item.rating.toFixed(2) : '0.00'}</Text>
+                        <Text style={styles.ratingValue}>{item.rating ? item.rating.toFixed(1) : '0.0'}</Text>
                     </View>
+                    <Text style={styles.ratingCount}>
+                        {item.ratings_count ? `(${item.ratings_count.toLocaleString()})` : ''}
+                    </Text>
 
                     {/* Simplified Metadata for Feed */}
                     <View style={styles.tagsContainer}>
@@ -181,6 +184,13 @@ const createStyles = (colors: any) => StyleSheet.create({
         color: colors.textLight,
         fontSize: 12,
         fontFamily: FONTS.medium,
+    },
+    ratingCount: {
+        color: colors.textLight,
+        fontSize: 12,
+        fontFamily: FONTS.regular,
+        marginTop: -4,
+        marginBottom: 6,
     },
     tagsContainer: {
         flexDirection: 'row',

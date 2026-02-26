@@ -121,11 +121,10 @@ const RecResultItem = ({
                         <View style={styles.starsContainer}>
                             {renderStars(item.rating || 0)}
                         </View>
-                        <Text style={styles.ratingValue}>{item.rating ? item.rating.toFixed(2) : '0.00'}</Text>
+                        <Text style={styles.ratingValue}>{item.rating ? item.rating.toFixed(1) : '0.0'}</Text>
                     </View>
-
                     <Text style={styles.ratingCount}>
-                        {item.ratings_count ? item.ratings_count.toLocaleString() : '0'} ratings
+                        {item.ratings_count ? `(${item.ratings_count.toLocaleString()})` : ''}
                     </Text>
 
                     {item.match_reasoning && (
@@ -318,7 +317,7 @@ const createStyles = (colors: any) => StyleSheet.create({
         fontSize: 12,
         color: colors.textLight,
         marginTop: 8,
-        fontFamily: FONTS.mono || undefined,
+        fontFamily: FONTS.regular,
         textAlign: 'right',
     },
     // List Item Styles

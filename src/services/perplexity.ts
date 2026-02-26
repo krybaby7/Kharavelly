@@ -4,7 +4,8 @@ import {
     INTERVIEW_ANALYSIS_PROMPT,
     INTERVIEW_INIT_PROMPT,
     INTERVIEW_FOLLOWUP_PROMPT,
-    PROFILE_QUESTION_STYLES
+    PROFILE_QUESTION_STYLES,
+    BATCH_GOODREADS_RATING_PROMPT
 } from './prompts';
 import { parseJson } from '../utils/helpers';
 import axios from 'axios';
@@ -172,4 +173,51 @@ export async function generateInterviewQuestion(
     } catch (e: any) {
         return { error: `Failed to parse response: ${e}`, raw_content: result.content };
     }
+}
+
+export async function fetchBatchRatings(
+    books: { title: string; author?: string }[],
+    model: string,
+    apiKey: string
+): Promise<Record<string, { rating: number; ratings_count: number }>> {
+    const booksListText = books.map((b, i) => `${i + 1}. "${b.title}" by ${b.author || 'Unknown'}`).join('\n');
+    const prompt = BATCH_GOODREADS_RATING_PROMPT.replace('{books_list}', booksListText);
+
+    const result = await callPerplexity(prompt, model, apiKey);
+
+    const ratingsMap: Record<string, { rating: number; ratings_count: number }> = {};
+
+    if (result.success && result.content) {
+        try {
+            const parsedArray = parseJson(result.content);
+            if (Array.isArray(parsedArray)) {
+                for (const item of parsedArray) {
+                    if (item.id !== undefined) {
+                        // Map using the id (1-indexed matching the Prompt formatting)
+                        const index = item.id - 1;
+                        if (index >= 0 && index < books.length) {
+                            const originalOriginalTitle = books[index].title.toLowerCase().trim();
+                            ratingsMap[originalOriginalTitle] = {
+                                rating: item.rating || 0,
+                                ratings_count: item.ratings_count || 0,
+                            };
+                        }
+                    } else if (item.title) {
+                        // Fallback to title match just in case
+                        const key = item.title.toLowerCase().trim();
+                        ratingsMap[key] = {
+                            rating: item.rating || 0,
+                            ratings_count: item.ratings_count || 0,
+                        };
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[Perplexity] Failed to parse batch ratings:', e);
+        }
+    } else {
+        console.error('[Perplexity] Batch rating fetch failed:', result.error);
+    }
+
+    return ratingsMap;
 }

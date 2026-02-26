@@ -48,7 +48,7 @@ OBJECTIVE:
 3. Do NOT recommend books from the "Context Books" list.
 
 REQUIRED JSON OUTPUT FORMAT:
-Return a single JSON object (no markdown, no other text):
+Return a single JSON object (no markdown, no other text). Fetch accurate ratings from Goodreads for the books.
 {
   "recommendations": [
     {
@@ -199,6 +199,7 @@ Output a JSON object with the following sections:
 4. "hidden_gems": 5 highly rated but less known books in these genres.
 
 REQUIRED JSON OUTPUT FORMAT:
+Return a single JSON object (no markdown, no other text):
 {
   "new_releases": [
     { "title": "Title", "author": "Author", "genre": "Genre" }
@@ -216,11 +217,13 @@ REQUIRED JSON OUTPUT FORMAT:
 Return ONLY valid JSON. No markdown, no intro/outro text.`;
 
 export const HOMEPAGE_NEWS_PROMPT = `Find 5 recent, interesting news articles, blog posts, or author interviews related to books, reading, or publishing.
-Focus on:
-- Upcoming highly anticipated releases
-- Author interviews or profiles
-- Literary prize announcements
-- Trends in the book world
+CRITICAL: Do NOT just provide lists of "top upcoming books". Provide a wide variety of literary news such as:
+- Author gossip or major controversies
+- Literary prize announcements and drama
+- Trends in the book world (e.g., BookTok trends, publishing industry shifts)
+- Major adaptation news (movies/TV shows based on books)
+
+ALSO CRITICAL: At least 1-2 of your items MUST be a YouTube video link (e.g., a BookTube review, an author interview on YouTube, or a video essay about books).
 
 REQUIRED JSON OUTPUT FORMAT:
 {
@@ -228,10 +231,29 @@ REQUIRED JSON OUTPUT FORMAT:
     {
       "title": "Headline",
       "summary": "Brief 1-sentence summary",
-      "url": "Link to article (if available, otherwise null)",
-      "source": "Source Name (e.g. NYT, Guardian, Tor.com)",
+      "url": "Link to article or YouTube video (if available, otherwise null)",
+      "source": "Source Name (e.g. NYT, Guardian, Tor.com, YouTube)",
       "date": "Date string (e.g. 'Oct 12, 2023')"
     }
   ]
 }
 Return ONLY valid JSON. No markdown.`;
+
+export const BATCH_GOODREADS_RATING_PROMPT = `Search the internet for the exact Goodreads average star rating and total ratings count for the following list of books.
+Do not guess. You must actually search for the Goodreads data for each book.
+If a book is not found or has no ratings on Goodreads, return 0 for both.
+
+BOOKS LIST:
+{books_list}
+
+REQUIRED JSON OUTPUT FORMAT:
+You MUST output ONLY a valid JSON array of objects (no markdown, no extra text).
+[
+  {
+    "id": 1,
+    "title": "Book Title",
+    "rating": 4.5,
+    "ratings_count": 12345
+  }
+]
+`;
